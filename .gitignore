@@ -6,3 +6,19 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Database files
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Output files
+output/*.csv
+output/*.json
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
