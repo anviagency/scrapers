@@ -1,24 +1,28 @@
 import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { JobListing } from '../types/JobListing';
-import { JobSource } from '../types/BaseJobListing';
-import type { Logger } from '../utils/logger';
+import type { BaseJobListing } from '../../types/BaseJobListing';
+import type { Logger } from '../../utils/logger';
+import { JobSource } from '../../types/BaseJobListing';
 
 /**
- * Database manager for storing and retrieving job listings
+ * Abstract base class for database managers
+ * Each source-specific database manager should extend this class
  */
-export class DatabaseManager {
-  private db: Database.Database;
-  private readonly logger: Logger;
+export abstract class BaseDatabaseManager {
+  protected db: Database.Database;
+  protected readonly logger: Logger;
+  protected readonly source: JobSource;
 
   /**
-   * Creates a new DatabaseManager instance
+   * Creates a new BaseDatabaseManager instance
    * @param dbPath - Path to SQLite database file
    * @param logger - Logger instance
+   * @param source - Job source (alljobs or jobmaster)
    */
-  constructor(dbPath: string, logger: Logger) {
+  constructor(dbPath: string, logger: Logger, source: JobSource) {
     this.logger = logger;
+    this.source = source;
 
     // Ensure database directory exists
     const dbDir = path.dirname(dbPath);
@@ -29,15 +33,31 @@ export class DatabaseManager {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL'); // Better concurrency
     this.initializeSchema();
+    this.migrateSchema(); // Run migrations after schema initialization
   }
 
   /**
-   * Initializes database schema
+   * Gets the table name for jobs
+   * Must be implemented by source-specific managers
+   * @returns Table name (e.g., 'jobs_alljobs' or 'jobs_jobmaster')
    */
-  private initializeSchema(): void {
+  protected abstract getJobsTableName(): string;
+
+  /**
+   * Gets the table name for scraping sessions
+   * Must be implemented by source-specific managers
+   * @returns Table name (e.g., 'scraping_sessions_alljobs' or 'scraping_sessions_jobmaster')
+   */
+  protected abstract getSessionsTableName(): string;
+
+  /**
+   * Initializes database schema
+   * Calls abstract methods to get table names
+   */
+  protected initializeSchema(): void {
     try {
       // Try to find schema.sql in multiple locations
-      let schemaPath = path.join(__dirname, 'schema.sql');
+      let schemaPath = path.join(__dirname, '..', 'schema.sql');
       
       // If running from dist, schema.sql might be in src
       if (!fs.existsSync(schemaPath)) {
@@ -53,19 +73,19 @@ export class DatabaseManager {
         }
       }
 
-      if (!fs.existsSync(schemaPath)) {
+      if (fs.existsSync(schemaPath)) {
+        const schema = fs.readFileSync(schemaPath, 'utf-8');
+        this.db.exec(schema);
+        this.logger.info('Database schema initialized from file', { schemaPath, source: this.source });
+      } else {
         // If file doesn't exist, create schema inline
-        this.logger.warn('Schema file not found, creating schema inline');
+        this.logger.warn('Schema file not found, creating schema inline', { source: this.source });
         this.createSchemaInline();
-        return;
       }
-
-      const schema = fs.readFileSync(schemaPath, 'utf-8');
-      this.db.exec(schema);
-      this.logger.info('Database schema initialized from file', { schemaPath });
     } catch (error) {
       this.logger.error('Failed to initialize database schema from file, trying inline', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       // Fallback to inline schema creation
       try {
@@ -73,6 +93,7 @@ export class DatabaseManager {
       } catch (inlineError) {
         this.logger.error('Failed to create schema inline', {
           error: inlineError instanceof Error ? inlineError.message : String(inlineError),
+          source: this.source,
         });
         throw inlineError;
       }
@@ -81,10 +102,14 @@ export class DatabaseManager {
 
   /**
    * Creates database schema inline (fallback when schema.sql is not found)
+   * Uses abstract methods to get table names
    */
-  private createSchemaInline(): void {
+  protected createSchemaInline(): void {
+    const jobsTable = this.getJobsTableName();
+    const sessionsTable = this.getSessionsTableName();
+
     const schema = `
-      CREATE TABLE IF NOT EXISTS jobs (
+      CREATE TABLE IF NOT EXISTS ${jobsTable} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         job_id TEXT NOT NULL UNIQUE,
         title TEXT NOT NULL,
@@ -92,7 +117,9 @@ export class DatabaseManager {
         description TEXT NOT NULL,
         location TEXT NOT NULL,
         job_type TEXT NOT NULL,
+        category TEXT,
         requirements TEXT,
+        target_audience TEXT,
         application_url TEXT NOT NULL,
         posted_date TEXT,
         company_id TEXT,
@@ -100,7 +127,7 @@ export class DatabaseManager {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS scraping_sessions (
+      CREATE TABLE IF NOT EXISTS ${sessionsTable} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         completed_at DATETIME,
@@ -110,92 +137,84 @@ export class DatabaseManager {
         error_message TEXT
       );
 
-      CREATE INDEX IF NOT EXISTS idx_jobs_job_id ON jobs(job_id);
-      CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
-      CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs(location);
-      CREATE INDEX IF NOT EXISTS idx_jobs_job_type ON jobs(job_type);
-      CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
-      CREATE INDEX IF NOT EXISTS idx_sessions_status ON scraping_sessions(status);
+      CREATE INDEX IF NOT EXISTS idx_${jobsTable}_job_id ON ${jobsTable}(job_id);
+      CREATE INDEX IF NOT EXISTS idx_${jobsTable}_company ON ${jobsTable}(company);
+      CREATE INDEX IF NOT EXISTS idx_${jobsTable}_location ON ${jobsTable}(location);
+      CREATE INDEX IF NOT EXISTS idx_${jobsTable}_job_type ON ${jobsTable}(job_type);
+      CREATE INDEX IF NOT EXISTS idx_${jobsTable}_created_at ON ${jobsTable}(created_at);
+      CREATE INDEX IF NOT EXISTS idx_${sessionsTable}_status ON ${sessionsTable}(status);
     `;
     this.db.exec(schema);
-    this.logger.info('Database schema initialized inline');
+    this.logger.info('Database schema initialized inline', { source: this.source });
   }
 
   /**
-   * Inserts or updates a job listing
-   * @param job - Job listing to insert/update
-   * @returns Inserted/updated job ID
+   * Migrates database schema to add new columns if they don't exist
+   * This ensures backward compatibility with existing databases
    */
-  upsertJob(job: JobListing): number {
+  protected migrateSchema(): void {
     try {
-      const stmt = this.db.prepare(`
-        INSERT INTO jobs (
-          job_id, title, company, description, location, job_type,
-          requirements, application_url, posted_date, company_id, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(job_id) DO UPDATE SET
-          title = excluded.title,
-          company = excluded.company,
-          description = excluded.description,
-          location = excluded.location,
-          job_type = excluded.job_type,
-          requirements = excluded.requirements,
-          application_url = excluded.application_url,
-          posted_date = excluded.posted_date,
-          company_id = excluded.company_id,
-          updated_at = CURRENT_TIMESTAMP
-      `);
-
-      const result = stmt.run(
-        job.jobId,
-        job.title,
-        job.company,
-        job.description,
-        job.location,
-        job.jobType,
-        job.requirements || null,
-        job.applicationUrl,
-        job.postedDate || null,
-        job.companyId || null
-      );
-
-      return result.lastInsertRowid as number;
+      const tableName = this.getJobsTableName();
+      
+      // Get all existing columns
+      const tableInfo = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+      const columnNames = tableInfo.map((col) => col.name);
+      
+      // Check if target_audience column exists
+      const hasTargetAudience = columnNames.includes('target_audience');
+      if (!hasTargetAudience) {
+        this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN target_audience TEXT`);
+        this.logger.info('Added target_audience column to database', { source: this.source });
+      }
+      
+      // Check if category column exists
+      const hasCategory = columnNames.includes('category');
+      if (!hasCategory) {
+        this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN category TEXT`);
+        this.logger.info('Added category column to database', { source: this.source });
+      }
     } catch (error) {
-      this.logger.error('Failed to upsert job', {
-        jobId: job.jobId,
+      this.logger.warn('Migration failed (column may already exist)', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
-      throw error;
     }
   }
 
   /**
-   * Inserts multiple job listings in a transaction
-   * @param jobs - Array of job listings
+   * Inserts or updates job listings
+   * @param jobs - Array of job listings to insert/update
    * @returns Number of jobs inserted/updated
    */
-  upsertJobs(jobs: JobListing[]): number {
+  upsertJobs(jobs: BaseJobListing[]): number {
+    if (jobs.length === 0) {
+      return 0;
+    }
+
+    const tableName = this.getJobsTableName();
     const insert = this.db.prepare(`
-      INSERT INTO jobs (
-        job_id, title, company, description, location, job_type,
-        requirements, application_url, posted_date, company_id, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO ${tableName} (
+        job_id, title, company, description, location, job_type, category,
+        requirements, target_audience, application_url, posted_date, company_id, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(job_id) DO UPDATE SET
         title = excluded.title,
         company = excluded.company,
         description = excluded.description,
         location = excluded.location,
         job_type = excluded.job_type,
+        category = excluded.category,
         requirements = excluded.requirements,
+        target_audience = excluded.target_audience,
         application_url = excluded.application_url,
         posted_date = excluded.posted_date,
         company_id = excluded.company_id,
         updated_at = CURRENT_TIMESTAMP
     `);
 
-    const insertMany = this.db.transaction((jobs: JobListing[]) => {
+    const insertMany = this.db.transaction((jobsList: BaseJobListing[]) => {
       let count = 0;
-      for (const job of jobs) {
+      for (const job of jobsList) {
         insert.run(
           job.jobId,
           job.title,
@@ -203,7 +222,9 @@ export class DatabaseManager {
           job.description,
           job.location,
           job.jobType,
+          (job as any).category || null, // category is optional
           job.requirements || null,
+          job.targetAudience || null,
           job.applicationUrl,
           job.postedDate || null,
           job.companyId || null
@@ -215,11 +236,12 @@ export class DatabaseManager {
 
     try {
       const count = insertMany(jobs);
-      this.logger.info('Bulk upsert completed', { count });
+      this.logger.info('Bulk upsert completed', { count, source: this.source });
       return count;
     } catch (error) {
       this.logger.error('Failed to bulk upsert jobs', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       throw error;
     }
@@ -238,9 +260,10 @@ export class DatabaseManager {
     jobType?: string;
     dateFrom?: string;
     dateTo?: string;
-  }): JobListing[] {
+  }): BaseJobListing[] {
     try {
-      let query = 'SELECT * FROM jobs WHERE 1=1';
+      const tableName = this.getJobsTableName();
+      let query = `SELECT * FROM ${tableName} WHERE 1=1`;
       const params: unknown[] = [];
 
       if (filters?.company) {
@@ -309,7 +332,9 @@ export class DatabaseManager {
         description: string;
         location: string;
         job_type: string;
+        category: string | null;
         requirements: string | null;
+        target_audience: string | null;
         application_url: string;
         posted_date: string | null;
         company_id: string | null;
@@ -324,25 +349,21 @@ export class DatabaseManager {
         description: row.description,
         location: row.location,
         jobType: row.job_type,
+        category: row.category || undefined,
         requirements: row.requirements || undefined,
+        targetAudience: row.target_audience || undefined,
         applicationUrl: row.application_url,
         postedDate: row.posted_date || undefined,
         companyId: row.company_id || undefined,
-        source: JobSource.ALLJOBS,
+        source: this.source,
       }));
     } catch (error) {
       this.logger.error('Failed to get jobs', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       throw error;
     }
-  }
-
-  /**
-   * Gets the underlying database instance (for advanced queries)
-   */
-  getDb(): Database.Database {
-    return this.db;
   }
 
   /**
@@ -358,14 +379,14 @@ export class DatabaseManager {
     dateTo?: string;
   }): number {
     try {
-      let query = 'SELECT COUNT(*) as count FROM jobs WHERE 1=1';
+      const tableName = this.getJobsTableName();
+      let query = `SELECT COUNT(*) as count FROM ${tableName} WHERE 1=1`;
       const params: unknown[] = [];
 
       if (filters?.company) {
         query += ' AND LOWER(company) LIKE LOWER(?)';
         params.push(`%${filters.company}%`);
       }
-
       if (filters?.location) {
         // Search in both Hebrew and English location names
         query += ' AND (LOWER(location) LIKE LOWER(?) OR LOWER(location) LIKE LOWER(?))';
@@ -390,7 +411,6 @@ export class DatabaseManager {
         const englishLocation = locationMap[filters.location.toLowerCase()] || filters.location;
         params.push(`%${englishLocation}%`);
       }
-
       if (filters?.jobType) {
         query += ' AND LOWER(job_type) LIKE LOWER(?)';
         params.push(`%${filters.jobType}%`);
@@ -412,6 +432,61 @@ export class DatabaseManager {
     } catch (error) {
       this.logger.error('Failed to get jobs count', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Gets a single job by ID
+   * @param jobId - Job ID to retrieve
+   * @returns Job listing or null if not found
+   */
+  getJobById(jobId: string): BaseJobListing | null {
+    try {
+      const tableName = this.getJobsTableName();
+      const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE job_id = ?`);
+      const row = stmt.get(jobId) as {
+        id: number;
+        job_id: string;
+        title: string;
+        company: string;
+        description: string;
+        location: string;
+        job_type: string;
+        category: string | null;
+        requirements: string | null;
+        application_url: string;
+        posted_date: string | null;
+        company_id: string | null;
+        created_at: string;
+        updated_at: string;
+      } | undefined;
+
+      if (!row) {
+        return null;
+      }
+
+      return {
+        jobId: row.job_id,
+        title: row.title,
+        company: row.company,
+        description: row.description,
+        location: row.location,
+        jobType: row.job_type,
+        category: row.category || undefined,
+        requirements: row.requirements || undefined,
+        applicationUrl: row.application_url,
+        postedDate: row.posted_date || undefined,
+        companyId: row.company_id || undefined,
+        source: this.source,
+      };
+    } catch (error) {
+      this.logger.error('Failed to get job by ID', {
+        jobId,
+        error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       throw error;
     }
@@ -423,14 +498,16 @@ export class DatabaseManager {
    */
   createScrapingSession(): number {
     try {
+      const tableName = this.getSessionsTableName();
       const stmt = this.db.prepare(
-        'INSERT INTO scraping_sessions (status) VALUES (?)'
+        `INSERT INTO ${tableName} (status) VALUES (?)`
       );
       const result = stmt.run('running');
       return result.lastInsertRowid as number;
     } catch (error) {
       this.logger.error('Failed to create scraping session', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       throw error;
     }
@@ -451,6 +528,7 @@ export class DatabaseManager {
     }
   ): void {
     try {
+      const tableName = this.getSessionsTableName();
       const fields: string[] = [];
       const values: unknown[] = [];
 
@@ -482,13 +560,14 @@ export class DatabaseManager {
       }
 
       values.push(sessionId);
-      const query = `UPDATE scraping_sessions SET ${fields.join(', ')} WHERE id = ?`;
+      const query = `UPDATE ${tableName} SET ${fields.join(', ')} WHERE id = ?`;
       const stmt = this.db.prepare(query);
       stmt.run(...values);
     } catch (error) {
       this.logger.error('Failed to update scraping session', {
         sessionId,
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       throw error;
     }
@@ -508,8 +587,9 @@ export class DatabaseManager {
     errorMessage: string | null;
   } | null {
     try {
+      const tableName = this.getSessionsTableName();
       const stmt = this.db.prepare(
-        'SELECT * FROM scraping_sessions ORDER BY started_at DESC LIMIT 1'
+        `SELECT * FROM ${tableName} ORDER BY started_at DESC LIMIT 1`
       );
       const row = stmt.get() as {
         id: number;
@@ -537,6 +617,7 @@ export class DatabaseManager {
     } catch (error) {
       this.logger.error('Failed to get last scraping session', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       return null;
     }
@@ -557,8 +638,9 @@ export class DatabaseManager {
     errorMessage: string | null;
   }> {
     try {
+      const tableName = this.getSessionsTableName();
       const stmt = this.db.prepare(
-        'SELECT * FROM scraping_sessions ORDER BY started_at DESC LIMIT ?'
+        `SELECT * FROM ${tableName} ORDER BY started_at DESC LIMIT ?`
       );
       const rows = stmt.all(limit) as Array<{
         id: number;
@@ -582,6 +664,7 @@ export class DatabaseManager {
     } catch (error) {
       this.logger.error('Failed to get scraping sessions', {
         error: error instanceof Error ? error.message : String(error),
+        source: this.source,
       });
       return [];
     }
@@ -592,7 +675,7 @@ export class DatabaseManager {
    */
   close(): void {
     this.db.close();
-    this.logger.info('Database connection closed');
+    this.logger.info('Database connection closed', { source: this.source });
   }
 }
 

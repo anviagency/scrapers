@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { Logger } from '../utils/logger';
 import { JobListingSchema, type JobListing } from '../types/JobListing';
+import { JobSource } from '../types/BaseJobListing';
 import type { Element } from 'domhandler';
 
 /**
@@ -163,80 +164,279 @@ export class JobListingParser {
         }
       }
 
-      // Extract location - the correct selector is div.job-content-top-location
+      // Extract location - COMPREHENSIVE: Get ALL locations, not just first
       let location = '';
+      const locations: string[] = [];
       
       // Strategy 1: Look for location in div.job-content-top-location
       const $locationDiv = $container.find('div.job-content-top-location').first();
       if ($locationDiv.length > 0) {
-        // Try to find a link first (single location)
-        const $locationLink = $locationDiv.find('a[href*="city="]').first();
-        if ($locationLink.length > 0) {
-          location = $locationLink.text().trim();
-        } else {
-          // If no link, try to extract from text after "מיקום המשרה:"
+        // Get ALL location links (not just first)
+        const $locationLinks = $locationDiv.find('a[href*="city="]');
+        if ($locationLinks.length > 0) {
+          $locationLinks.each((_, el) => {
+            const city = $(el).text().trim();
+            if (city && !locations.includes(city)) {
+              locations.push(city);
+            }
+          });
+        }
+        
+        // Also try to get all cities from job-regions-content
+        const $regionsContent = $locationDiv.find('div.job-regions-content');
+        if ($regionsContent.length > 0) {
+          $regionsContent.find('a').each((_, el) => {
+            const city = $(el).text().trim();
+            if (city && !locations.includes(city)) {
+              locations.push(city);
+            }
+          });
+        }
+        
+        // If no links found, try to extract from text
+        if (locations.length === 0) {
           const locationText = $locationDiv.text();
           const locationMatch = locationText.match(/מיקום\s*המשרה[^:：]*[:：]\s*([^\n\r]+)/i);
           if (locationMatch && locationMatch[1]) {
-            location = locationMatch[1].trim();
-            // Remove "מספר מקומות" if present
-            location = location.replace(/מספר\s*מקומות/i, '').trim();
-          }
-          
-          // If still empty, try to get all cities from job-regions-content
-          if (!location || location.length < 2) {
-            const $regionsContent = $locationDiv.find('div.job-regions-content');
-            if ($regionsContent.length > 0) {
-              const cities: string[] = [];
-              $regionsContent.find('a').each((_, el) => {
-                const city = $(el).text().trim();
-                if (city) {
-                  cities.push(city);
-                }
-              });
-              if (cities.length > 0) {
-                location = cities.join(', ');
+            let locationTextValue = locationMatch[1].trim();
+            // Remove "מספר מקומות" if present but keep the actual locations
+            locationTextValue = locationTextValue.replace(/מספר\s*מקומות/i, '').trim();
+            if (locationTextValue && locationTextValue.length > 2) {
+              // Split by common separators if multiple locations
+              const splitLocations = locationTextValue.split(/[,;|]/).map(l => l.trim()).filter(l => l.length > 0);
+              if (splitLocations.length > 0) {
+                locations.push(...splitLocations);
+              } else {
+                locations.push(locationTextValue);
               }
             }
           }
         }
       }
       
-      // Strategy 2: Fallback - look for location link anywhere
-      if (!location || location.length < 2) {
-        const $locationLink = $container.find('a[href*="city="]').first();
-        if ($locationLink.length > 0) {
-          location = $locationLink.text().trim();
-        }
+      // Strategy 2: Fallback - look for ALL location links anywhere in container
+      if (locations.length === 0) {
+        const $allLocationLinks = $container.find('a[href*="city="]');
+        $allLocationLinks.each((_, el) => {
+          const city = $(el).text().trim();
+          if (city && !locations.includes(city)) {
+            locations.push(city);
+          }
+        });
+      }
+      
+      // Join all locations
+      if (locations.length > 0) {
+        location = locations.join(', ');
+      }
+      
+      // Translate common English location terms to Hebrew
+      const locationTranslations: Record<string, string> = {
+        'More than one': 'מספר מקומות',
+        'Multiple locations': 'מספר מקומות',
+        'Various locations': 'מספר מקומות',
+      };
+      if (location && locationTranslations[location]) {
+        location = locationTranslations[location];
       }
 
-      // Extract job type - the correct selector is div.job-content-top-type
+      // Extract job type - COMPREHENSIVE: Get ALL job types, not just first
       let jobType = '';
+      const jobTypes: string[] = [];
       
       // Strategy 1: Look for job type in div.job-content-top-type
       const $jobTypeDiv = $container.find('div.job-content-top-type').first();
       if ($jobTypeDiv.length > 0) {
+        // First, try to extract from text content - this is most reliable
         const jobTypeText = $jobTypeDiv.text();
-        const jobTypeMatch = jobTypeText.match(/סוג\s*משרה[^:：]*[:：]\s*([^\n\r]+)/i);
+        
+        // Try Hebrew first: "סוג משרה: מספר סוגים" or "סוג משרה: משרה מלאה"
+        let jobTypeMatch = jobTypeText.match(/סוג\s*משרה[^:：]*[:：]\s*([^\n\r]+)/i);
         if (jobTypeMatch && jobTypeMatch[1]) {
-          jobType = jobTypeMatch[1].trim();
+          let typeValue = jobTypeMatch[1].trim();
+          
+          // If it says "מספר סוגים", we need to extract actual types from description
+          if (typeValue.match(/מספר\s*סוגים/i)) {
+            // Extract job types from description text - look for common patterns
+            const descriptionText = $container.text();
+            const typePatterns = [
+              /משרה\s*מלאה/gi,
+              /משרה\s*חלקית/gi,
+              /משמרות/gi,
+              /עבודה\s*זמנית/gi,
+              /פרילאנס/gi,
+              /עבודה\s*היברידית/gi,
+              /עבודה\s*מהבית/gi,
+              /לדוברי\s*שפות/gi,
+              /מתאים\s*גם\s*לחיילים\s*משוחררים/gi,
+              /מתאים\s*גם\s*למגזר\s*הדתי/gi,
+              /ללא\s*ניסיון/gi,
+              /עבודות\s*ללא\s*קורות\s*חיים/gi,
+            ];
+            for (const pattern of typePatterns) {
+              const matches = descriptionText.matchAll(pattern);
+              for (const match of matches) {
+                const type = match[0].trim();
+                if (type && !jobTypes.includes(type)) {
+                  jobTypes.push(type);
+                }
+              }
+            }
+          } else {
+            // Not "מספר סוגים" - extract the actual type value
+            // Remove "מספר סוגים" if present
+            typeValue = typeValue.replace(/מספר\s*סוגים/i, '').trim();
+            if (typeValue && typeValue.length > 2) {
+              // Split by common separators if multiple types
+              const splitTypes = typeValue.split(/[,;|]/).map(t => t.trim()).filter(t => t.length > 0);
+              if (splitTypes.length > 0) {
+                splitTypes.forEach(t => {
+                  if (!jobTypes.includes(t)) {
+                    jobTypes.push(t);
+                  }
+                });
+              } else {
+                if (!jobTypes.includes(typeValue)) {
+                  jobTypes.push(typeValue);
+                }
+              }
+            }
+          }
+        } else {
+          // Try English patterns
+          jobTypeMatch = jobTypeText.match(/Job\s*Type[^:：]*[:：]\s*([^\n\r]+)/i);
+          if (jobTypeMatch && jobTypeMatch[1]) {
+            let typeValue = jobTypeMatch[1].trim();
+            // Translate common English terms
+            const typeTranslations: Record<string, string> = {
+              'Full Time': 'משרה מלאה',
+              'Part Time': 'משרה חלקית',
+              'Full Time and Hybrid work': 'משרה מלאה ועבודה היברידית',
+              'Shifts': 'משמרות',
+              'Temporary': 'עבודה זמנית',
+              'Freelance': 'פרילאנס',
+              'Contract': 'חוזה',
+              'Permanent': 'קבוע',
+            };
+            if (typeTranslations[typeValue]) {
+              typeValue = typeTranslations[typeValue];
+            }
+            // Split if multiple types
+            const splitTypes = typeValue.split(/and|&|,/).map(t => t.trim()).filter(t => t.length > 0);
+            splitTypes.forEach(t => {
+              const translated = typeTranslations[t] || t;
+              if (!jobTypes.includes(translated)) {
+                jobTypes.push(translated);
+              }
+            });
+          } else {
+            // Try just "Type:"
+            jobTypeMatch = jobTypeText.match(/Type[^:：]*[:：]\s*([^\n\r]+)/i);
+            if (jobTypeMatch && jobTypeMatch[1]) {
+              let typeValue = jobTypeMatch[1].trim();
+              const typeTranslations: Record<string, string> = {
+                'Full Time': 'משרה מלאה',
+                'Part Time': 'משרה חלקית',
+                'Shifts': 'משמרות',
+              };
+              if (typeTranslations[typeValue]) {
+                typeValue = typeTranslations[typeValue];
+              }
+              if (!jobTypes.includes(typeValue)) {
+                jobTypes.push(typeValue);
+              }
+            }
+          }
         }
+        
+        // Also get ALL job type elements (spans, divs, labels, links) as backup
+        const $typeElements = $jobTypeDiv.find('span, div, label, a').not('a[href*="city="]');
+        $typeElements.each((_, el) => {
+          const typeText = $(el).text().trim();
+          // Skip if it's just "סוג משרה:" or "Job Type:" or "מספר סוגים"
+          if (typeText && 
+              typeText.length > 2 && 
+              !typeText.match(/^סוג\s*משרה[^:：]*[:：]?\s*$/i) &&
+              !typeText.match(/^Job\s*Type[^:：]*[:：]?\s*$/i) &&
+              !typeText.match(/^Type[^:：]*[:：]?\s*$/i) &&
+              !typeText.match(/מספר\s*סוגים/i) &&
+              !jobTypes.includes(typeText)) {
+            jobTypes.push(typeText);
+          }
+        });
       }
       
-      // Strategy 2: Fallback - look in container text
-      if (!jobType || jobType.length < 2) {
+      // Strategy 2: Fallback - look in container text (both Hebrew and English)
+      if (jobTypes.length === 0) {
         const containerText = $container.text();
         const jobTypePatterns = [
           /סוג\s*משרה[^:：]*[:：]\s*([^\n\r]+)/i,
+          /Job\s*Type[^:：]*[:：]\s*([^\n\r]+)/i,
+          /Type[^:：]*[:：]\s*([^\n\r]+)/i,
         ];
         
         for (const pattern of jobTypePatterns) {
           const match = containerText.match(pattern);
           if (match && match[1]) {
-            jobType = match[1].trim();
-            break;
+            let typeValue = match[1].trim();
+            // Skip if it's "מספר סוגים"
+            if (typeValue.match(/מספר\s*סוגים/i)) {
+              // Extract from description
+              const typePatterns = [
+                /משרה\s*מלאה/gi,
+                /משרה\s*חלקית/gi,
+                /משמרות/gi,
+                /עבודה\s*זמנית/gi,
+                /פרילאנס/gi,
+              ];
+              for (const pattern of typePatterns) {
+                const matches = containerText.matchAll(pattern);
+                for (const match of matches) {
+                  const type = match[0].trim();
+                  if (type && !jobTypes.includes(type)) {
+                    jobTypes.push(type);
+                  }
+                }
+              }
+            } else {
+              // Clean up common prefixes
+              typeValue = typeValue.replace(/^סוג\s*משרה[^:：]*[:：]\s*/i, '').trim();
+              typeValue = typeValue.replace(/^Job\s*Type[^:：]*[:：]\s*/i, '').trim();
+              if (typeValue.length >= 2) {
+                // Translate if English
+                const typeTranslations: Record<string, string> = {
+                  'Full Time': 'משרה מלאה',
+                  'Part Time': 'משרה חלקית',
+                  'Full Time and Hybrid work': 'משרה מלאה ועבודה היברידית',
+                  'Shifts': 'משמרות',
+                };
+                if (typeTranslations[typeValue]) {
+                  typeValue = typeTranslations[typeValue];
+                }
+                if (!jobTypes.includes(typeValue)) {
+                  jobTypes.push(typeValue);
+                }
+                break;
+              }
+            }
           }
         }
+      }
+      
+      // Strategy 3: Look for job type in structured data attributes or classes
+      if (jobTypes.length === 0) {
+        const $typeElement = $container.find('[data-job-type], [class*="job-type"], [class*="jobType"]').first();
+        if ($typeElement.length > 0) {
+          const typeValue = $typeElement.text().trim() || $typeElement.attr('data-job-type') || '';
+          if (typeValue && typeValue.length >= 2) {
+            jobTypes.push(typeValue);
+          }
+        }
+      }
+      
+      // Join all job types
+      if (jobTypes.length > 0) {
+        jobType = jobTypes.join(', ');
       }
 
       // Extract description - the correct selector is div.job-content-top-desc
@@ -271,6 +471,7 @@ export class JobListingParser {
 
       // Extract requirements - found in div.PT15 inside job-content-top-desc
       let requirements = '';
+      let jobTargetAudience = ''; // Store "המשרה מיועדת" separately
       
       // Strategy 1: Look for requirements in div.PT15
       const $requirementsDiv = $container.find('div.PT15').first();
@@ -278,12 +479,30 @@ export class JobListingParser {
         const requirementsText = $requirementsDiv.text();
         const requirementsMatch = requirementsText.match(/דרישות[^:：]*[:：]\s*(.+)/is);
         if (requirementsMatch && requirementsMatch[1]) {
-          requirements = requirementsMatch[1].trim();
-          // Clean up - remove "המשרה מיועדת" text at the end
-          requirements = requirements.replace(/המשרה\s*מיועדת.*$/i, '').trim();
+          let fullRequirements = requirementsMatch[1].trim();
+          
+          // Extract "המשרה מיועדת" text and remove it from requirements
+          const targetAudienceMatch = fullRequirements.match(/(המשרה\s*מיועדת[^.]*\.?)/i);
+          if (targetAudienceMatch && targetAudienceMatch[1]) {
+            jobTargetAudience = targetAudienceMatch[1].trim();
+            // Remove it from requirements
+            requirements = fullRequirements.replace(/(המשרה\s*מיועדת[^.]*\.?)/i, '').trim();
+          } else {
+            requirements = fullRequirements;
+          }
         } else {
           // If no match, take all text after "דרישות:"
-          requirements = requirementsText.replace(/^[^:：]*[:：]\s*/i, '').trim();
+          let fullText = requirementsText.replace(/^[^:：]*[:：]\s*/i, '').trim();
+          
+          // Check for "המשרה מיועדת" in the full text
+          const targetAudienceMatch = fullText.match(/(המשרה\s*מיועדת[^.]*\.?)/i);
+          if (targetAudienceMatch && targetAudienceMatch[1]) {
+            jobTargetAudience = targetAudienceMatch[1].trim();
+            // Remove it from requirements
+            requirements = fullText.replace(/(המשרה\s*מיועדת[^.]*\.?)/i, '').trim();
+          } else {
+            requirements = fullText;
+          }
         }
       }
       
@@ -297,16 +516,256 @@ export class JobListingParser {
         for (const pattern of requirementsPatterns) {
           const match = containerText.match(pattern);
           if (match && match[1]) {
-            requirements = match[1].trim();
+            let fullRequirements = match[1].trim();
+            
+            // Check for "המשרה מיועדת" in the matched text
+            const targetAudienceMatch = fullRequirements.match(/(המשרה\s*מיועדת[^.]*\.?)/i);
+            if (targetAudienceMatch && targetAudienceMatch[1]) {
+              jobTargetAudience = targetAudienceMatch[1].trim();
+              // Remove it from requirements
+              requirements = fullRequirements.replace(/(המשרה\s*מיועדת[^.]*\.?)/i, '').trim();
+            } else {
+              requirements = fullRequirements;
+            }
             break;
           }
         }
+      }
+      
+      // Strategy 3: Look specifically for "המשרה מיועדת" text anywhere in container
+      if (!jobTargetAudience) {
+        const containerText = $container.text();
+        const targetAudienceMatch = containerText.match(/(המשרה\s*מיועדת[^.]*\.?)/i);
+        if (targetAudienceMatch && targetAudienceMatch[1]) {
+          jobTargetAudience = targetAudienceMatch[1].trim();
+        }
+      }
+      
+      // Clean up requirements - remove any remaining "המשרה מיועדת" text
+      if (requirements) {
+        requirements = requirements.replace(/(המשרה\s*מיועדת[^.]*\.?)/i, '').trim();
       }
 
       // Construct absolute application URL
       const applicationUrl = href.startsWith('http')
         ? href
         : `${this.baseUrl}${href.startsWith('/') ? href : `/${href}`}`;
+
+      // Extract category - COMPREHENSIVE: From multiple sources
+      let category = '';
+      
+      // Strategy 1: Extract from CategoriesLinksOfJobSeoBox1_divJobCategoriesLinks (most reliable for job detail pages)
+      // This is the category box that appears on the SIDE of job detail pages - NOT inside the job container
+      // We search at the PAGE level ($), not the container level
+      // IMPORTANT: There can be THREE categories:
+      //   - Primary (PLink) - main category
+      //   - Secondary (ChLink) - sub-category
+      //   - JobsForVeterans - special category for veterans/other groups
+      const $categoryBox = $('div#CategoriesLinksOfJobSeoBox1_divJobCategoriesLinks');
+      if ($categoryBox.length > 0) {
+        const categories: string[] = [];
+        
+        // Extract primary category from CategoriesLinksOfJobSeoBox1_PLink
+        const $primaryCategoryLink = $categoryBox.find('a#CategoriesLinksOfJobSeoBox1_PLink');
+        if ($primaryCategoryLink.length > 0) {
+          const primaryCategoryText = $primaryCategoryLink.text().trim();
+          if (primaryCategoryText && primaryCategoryText.length > 2) {
+            categories.push(primaryCategoryText);
+            this.logger.debug('Found primary category from CategoriesLinksOfJobSeoBox1_PLink', { category: primaryCategoryText });
+          }
+        }
+        
+        // Extract secondary category from CategoriesLinksOfJobSeoBox1_ChLink
+        const $secondaryCategoryLink = $categoryBox.find('a#CategoriesLinksOfJobSeoBox1_ChLink');
+        if ($secondaryCategoryLink.length > 0) {
+          const secondaryCategoryText = $secondaryCategoryLink.text().trim();
+          if (secondaryCategoryText && secondaryCategoryText.length > 2 && !categories.includes(secondaryCategoryText)) {
+            categories.push(secondaryCategoryText);
+            this.logger.debug('Found secondary category from CategoriesLinksOfJobSeoBox1_ChLink', { category: secondaryCategoryText });
+          }
+        }
+        
+        // Extract tertiary category from CategoriesLinksOfJobSeoBox1_JobsForVeterans (or similar special categories)
+        const $tertiaryLinks = $categoryBox.find('a[id*="CategoriesLinksOfJobSeoBox1_"]').not('#CategoriesLinksOfJobSeoBox1_PLink').not('#CategoriesLinksOfJobSeoBox1_ChLink');
+        $tertiaryLinks.each((_, el) => {
+          const tertiaryText = $(el).text().trim();
+          if (tertiaryText && tertiaryText.length > 2 && !categories.includes(tertiaryText)) {
+            categories.push(tertiaryText);
+            this.logger.debug('Found tertiary category', { category: tertiaryText });
+          }
+        });
+        
+        // If we found categories, join them with comma
+        if (categories.length > 0) {
+          category = categories.join(', ');
+        }
+        
+        // Fallback: Get all L_Orange links in the category box (if IDs not found)
+        if (!category || category.length < 2) {
+          const $orangeLinks = $categoryBox.find('a.L_Orange');
+          if ($orangeLinks.length > 0) {
+            const foundCategories: string[] = [];
+            $orangeLinks.each((_, el) => {
+              const categoryText = $(el).text().trim();
+              if (categoryText && categoryText.length > 2 && !foundCategories.includes(categoryText)) {
+                foundCategories.push(categoryText);
+              }
+            });
+            if (foundCategories.length > 0) {
+              category = foundCategories.join(', ');
+              this.logger.debug('Found categories from L_Orange links', { categories: foundCategories });
+            }
+          }
+        }
+      }
+      
+      // Strategy 2: Extract from breadcrumb in the full page (for job detail pages)
+      // Breadcrumb format: "דרושים » בתי קפה, מסעדות ואירועים » דרוש שף רשתי..."
+      if (!category || category.length < 2) {
+        const $breadcrumb = $('h1').filter((_, el) => {
+          const text = $(el).text();
+          return text.includes('דרושים') && text.includes('»');
+        }).first();
+        
+        if ($breadcrumb.length > 0) {
+          // Look for links inside the breadcrumb with position parameter
+          const $breadcrumbLinks = $breadcrumb.find('a[href*="position="]');
+          if ($breadcrumbLinks.length > 0) {
+            const $categoryLink = $breadcrumbLinks.eq(0);
+            const categoryText = $categoryLink.text().trim();
+            if (categoryText && categoryText.length > 2) {
+              const isLocation = /^ראש|^תל|^חיפה|^ירושלים|^באר|^נתניה|^צפון|^דרום|^מרכז|^גוש|^אזור|^שפלה|^שרון|^קרית|^אשדוד|^רמת|^רעננה|^חולון|^בת|^ים|^גבעתיים|^פתח|^תקווה/i.test(categoryText);
+              const isJobType = /^משרה|^סוג|^Job|^Type|^מספר|^מקומות|^סוגים/i.test(categoryText);
+              if (!isLocation && !isJobType) {
+                category = categoryText;
+              }
+            }
+          }
+          
+          // Fallback: Extract from breadcrumb text pattern
+          if (!category || category.length < 2) {
+            const breadcrumbText = $breadcrumb.text();
+            const breadcrumbMatch = breadcrumbText.match(/דרושים\s*»\s*([^»]+?)(?:\s*»|$)/);
+            if (breadcrumbMatch && breadcrumbMatch[1]) {
+              const potentialCategory = breadcrumbMatch[1].trim();
+              const isLocation = /^ראש|^תל|^חיפה|^ירושלים|^באר|^נתניה|^צפון|^דרום|^מרכז|^גוש|^אזור|^שפלה|^שרון|^קרית|^אשדוד|^רמת|^רעננה|^חולון|^בת|^ים|^גבעתיים|^פתח|^תקווה/i.test(potentialCategory);
+              const isJobType = /^משרה|^סוג|^Job|^Type|^מספר|^מקומות|^סוגים/i.test(potentialCategory);
+              if (!isLocation && !isJobType && potentialCategory.length > 2) {
+                category = potentialCategory;
+              }
+            }
+          }
+        }
+      }
+      
+      // Strategy 2: Look for category in links with position parameter
+      // On listing pages, category links appear near each job listing
+      // We need to find the category link that's closest to THIS specific job
+      if (!category || category.length < 2) {
+        // First, try to find links with position= in the container
+        let $categoryLinks = $container.find('a[href*="position="]').not('a[href*="city="]').not('a[href*="type="]');
+        
+        // If not found in container, search in parent elements (job might be in a wrapper)
+        if ($categoryLinks.length === 0) {
+          const $parent = $container.parent();
+          if ($parent.length > 0) {
+            $categoryLinks = $parent.find('a[href*="position="]').not('a[href*="city="]').not('a[href*="type="]');
+          }
+        }
+        
+        // If still not found, search in siblings (category might be in a sibling element)
+        if ($categoryLinks.length === 0) {
+          const $siblings = $container.siblings();
+          $siblings.each((_, sibling) => {
+            const $siblingLinks = $(sibling).find('a[href*="position="]').not('a[href*="city="]').not('a[href*="type="]');
+            if ($siblingLinks.length > 0) {
+              $categoryLinks = $categoryLinks.add($siblingLinks);
+            }
+          });
+        }
+        
+        // Process found links
+        let foundCategory = false;
+        $categoryLinks.each((_, el) => {
+          if (foundCategory) return; // Skip if we already found a category
+          
+          const $link = $(el);
+          const linkText = $link.text().trim();
+          const href = $link.attr('href') || '';
+          
+          // Skip if it's location, job type, or common non-category text
+          const isLocation = /^מיקום|^Location|^ראש|^תל|^חיפה|^ירושלים|^באר|^נתניה|^צפון|^דרום|^מרכז|^גוש|^אזור|^שפלה|^שרון|^קרית|^אשדוד|^רמת|^רעננה|^חולון|^בת|^ים|^גבעתיים|^פתח|^תקווה|^מגדל|^כפר|^מושב|^קיבוץ/i.test(linkText);
+          const isJobType = /^סוג|^Job|^Location|^Type|^מספר|^מקומות|^סוגים|^משרה|^חלקית|^מלאה|^משמרות/i.test(linkText);
+          
+          // Skip if href contains city= or type= parameters (these are locations/job types, not categories)
+          const hasCityParam = href.includes('city=');
+          const hasTypeParam = href.includes('type=');
+          
+          // Skip empty or very short text
+          if (!linkText || linkText.length < 2 || linkText.length > 100) {
+            return;
+          }
+          
+          // Skip common non-category text
+          if (linkText.match(/^דרושים$/i) || 
+              linkText.match(/^כל\s*החברות$/i) ||
+              linkText.match(/^הגש\s*מועמדות$/i) ||
+              linkText.match(/^שמור\s*משרה$/i)) {
+            return;
+          }
+          
+          // If it's not a location or job type, and has position= parameter, it's likely a category
+          if (!isLocation && 
+              !isJobType &&
+              !hasCityParam &&
+              !hasTypeParam &&
+              href.includes('position=')) {
+            category = linkText;
+            foundCategory = true;
+          }
+        });
+      }
+      
+      // Strategy 3: Look for category in yellow-highlighted buttons or highlighted elements
+      if (!category || category.length < 2) {
+        // Look for highlighted/yellow buttons that might contain category
+        const $categoryButtons = $container.find('button, a, span, div').filter((_, el) => {
+          const $el = $(el);
+          const text = $el.text().trim();
+          const classes = $el.attr('class') || '';
+          // Check if it's highlighted or looks like a category button
+          return (classes.includes('yellow') || classes.includes('highlight') || classes.includes('category')) &&
+                 text.length > 2 &&
+                 !text.match(/^סוג\s*משרה|^מיקום|^Job\s*Type|^Location/i);
+        });
+        
+        $categoryButtons.each((_, el) => {
+          const categoryText = $(el).text().trim();
+          if (categoryText && categoryText.length > 2) {
+            const categoryPatterns = [
+              /חשמל|אלקטרוניקה|מכירות|מנהלה|שירות|לוגיסטיקה|חשבונאות|מחשבים|תוכנה|רפואה|בנייה|ביטחון|כלכלה|משאבי\s*אנוש|שיווק|חינוך|משפטים|אדריכלות|תקשורת|תיירות|מזון|מכונות|תעשיה|נהג|רכב|תחבורה|קמעונאות|רכש|יבוא|יצוא|ביטוח|הוראה|הדרכה|אדמיניסטרציה|מזכירות|פקידות/i,
+            ];
+            for (const pattern of categoryPatterns) {
+              if (pattern.test(categoryText)) {
+                if (!category) {
+                  category = categoryText;
+                } else if (!category.includes(categoryText)) {
+                  category += ', ' + categoryText;
+                }
+                break;
+              }
+            }
+          }
+        });
+      }
+      
+      // Strategy 4: Extract from page URL if available (for category pages)
+      if ((!category || category.length < 2) && _pageUrl) {
+        const urlMatch = _pageUrl.match(/position=(\d+)/);
+        if (urlMatch) {
+          // Could map position IDs to category names, but for now skip
+        }
+      }
 
       // Fallback values if still empty
       if (!company || company.length < 2) {
@@ -329,9 +788,12 @@ export class JobListingParser {
         description,
         location,
         jobType,
+        category: category || undefined,
         requirements: requirements || undefined,
+        targetAudience: jobTargetAudience || undefined,
         applicationUrl,
         companyId,
+        source: JobSource.ALLJOBS,
       };
 
       // Validate with Zod schema

@@ -3,328 +3,923 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>דאשבורד - AllJobs Scraper</title>
+    <title>2025 Scraping Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
     <style>
+        :root {
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent-color: #0ea5e9;
+            --success-color: #10b981;
+            --border-subtle: #e2e8f0;
+            --shadow-soft: 0 20px 40px -15px rgba(0,0,0,0.05);
+            --card-radius: 24px;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Heebo', sans-serif;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: var(--bg-body);
+            color: var(--text-primary);
             min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             padding: 20px;
-            color: #333;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        .dashboard-container {
+            width: 100%;
+            max-width: 950px;
+            background: var(--bg-card);
+            border-radius: var(--card-radius);
+            padding: 40px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid #f1f5f9;
         }
 
-        h1 {
-            color: white;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 2.5em;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
         }
 
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .refresh-trigger {
+            background: #f1f5f9;
+            border: none;
+            color: var(--text-secondary);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .refresh-trigger:hover { 
+            background: #e2e8f0; 
+            color: var(--text-primary); 
+            transform: rotate(90deg); 
+        }
+
+        .tabs-nav {
+            display: flex;
             gap: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 10px;
         }
 
-        .card {
-            background: white;
-            border-radius: 12px;
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 10px 5px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 1.05rem;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -11px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--accent-color);
+            border-radius: 3px 3px 0 0;
+        }
+
+        .tab-content { 
+            display: none; 
+            animation: fadeUp 0.4s ease; 
+        }
+        .tab-content.active { 
+            display: block; 
+        }
+        @keyframes fadeUp { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .metric-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metric-value {
+            font-size: 3.5rem;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--text-primary);
+            letter-spacing: -2px;
+            font-variant-numeric: tabular-nums;
+            display: flex;
+            align-items: center;
+        }
+
+        .live-indicator {
+            width: 10px;
+            height: 10px;
+            background-color: var(--success-color);
+            border-radius: 50%;
+            margin-right: 12px;
+            display: none;
+            box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
+            animation: pulse 2s infinite;
+        }
+        .is-running .live-indicator { 
+            display: block; 
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        .live-status-section {
+            background: #f8fafc;
+            border-radius: 20px;
             padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
-        }
-
-        .card-title {
-            font-size: 0.9em;
-            color: #666;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .card-value {
-            font-size: 2.5em;
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 5px;
-        }
-
-        .card-subtitle {
-            font-size: 0.85em;
-            color: #999;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            border: 1px solid var(--border-subtle);
         }
 
         .status-badge {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: bold;
-            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+        .status-text-running { 
+            color: var(--success-color); 
         }
 
-        .status-completed {
-            background: #10b981;
-            color: white;
+        .live-counters-container {
+            display: flex;
+            gap: 30px;
         }
 
-        .status-running {
-            background: #f59e0b;
-            color: white;
+        .live-counter-item {
+            text-align: left;
         }
 
-        .status-failed {
-            background: #ef4444;
-            color: white;
+        .counter-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        .counter-label { 
+            font-size: 0.85rem; 
+            color: var(--text-secondary); 
         }
 
-        .last-scraping {
-            background: white;
+        .actions-container {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 14px 28px;
             border-radius: 12px;
+            border: none;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+        }
+        .btn-primary:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 15px rgba(14, 165, 233, 0.3); 
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: white;
+            border: 2px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+        .btn-secondary:hover { 
+            border-color: var(--text-secondary); 
+            color: var(--text-primary); 
+        }
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .last-run-info {
+            margin-right: auto;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .last-scraping-section {
+            background: #f8fafc;
+            border-radius: 20px;
             padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+            margin-top: 30px;
+            border: 1px solid var(--border-subtle);
         }
 
-        .last-scraping h2 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 1.5em;
+        .last-scraping-section h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: var(--text-primary);
         }
 
-        .info-row {
+        .last-scraping-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .last-scraping-info div {
             display: flex;
             justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
         }
 
-        .info-row:last-child {
-            border-bottom: none;
-        }
-
-        .info-label {
-            color: #666;
-            font-weight: 500;
-        }
-
-        .info-value {
-            color: #333;
-            font-weight: bold;
-        }
-
-        .loading {
-            text-align: center;
+        .status-badge-completed {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: var(--success-color);
             color: white;
-            font-size: 1.2em;
-            padding: 40px;
+            font-size: 0.85rem;
+            font-weight: 600;
         }
 
-        .error {
-            background: #fee;
-            color: #c33;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-
-        .refresh-btn {
-            background: white;
-            color: #667eea;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 1em;
-            font-weight: bold;
-            cursor: pointer;
-            margin: 20px auto;
-            display: block;
-            transition: all 0.2s;
-        }
-
-        .refresh-btn:hover {
-            background: #667eea;
+        .status-badge-running {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: var(--accent-color);
             color: white;
-            transform: scale(1.05);
+            font-size: 0.85rem;
+            font-weight: 600;
         }
 
-        .time-ago {
-            color: #999;
-            font-size: 0.9em;
+        .status-badge-stopped {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: var(--text-secondary);
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .metrics-grid { 
+                grid-template-columns: 1fr; 
+                gap: 20px; 
+            }
+            .live-status-section { 
+                flex-direction: column; 
+                align-items: flex-start; 
+                gap: 20px; 
+            }
+            .actions-container { 
+                flex-direction: column; 
+                align-items: stretch; 
+            }
+            .last-run-info { 
+                margin-right: 0; 
+                margin-top: 10px; 
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📊 דאשבורד Scraping</h1>
-        
-        <button class="refresh-btn" onclick="loadDashboard()">🔄 רענון</button>
+    <div class="dashboard-container">
+        <header class="header">
+            <h1>Multi-Source Scraping</h1>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn btn-primary" onclick="startAllScrapers()" id="start-all-btn" style="padding: 10px 20px; font-size: 0.9rem;">הפעל הכל</button>
+                <button class="btn btn-secondary" onclick="stopAllScrapers()" id="stop-all-btn" style="padding: 10px 20px; font-size: 0.9rem; display: none;">עצור הכל</button>
+                <button class="refresh-trigger" onclick="loadDashboard()" title="רענון נתונים">↻</button>
+            </div>
+        </header>
 
-        <div id="loading" class="loading">טוען נתונים...</div>
-        <div id="error" class="error" style="display: none;"></div>
-        
-        <div id="dashboard" style="display: none;">
-            <div class="dashboard-grid">
-                <div class="card">
-                    <div class="card-title">סה"כ משרות</div>
-                    <div class="card-value" id="totalJobs">-</div>
-                    <div class="card-subtitle">משרות במסד הנתונים</div>
+        <nav class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab('total')">מבט על</button>
+            <button class="tab-btn" onclick="switchTab('jobmaster')">JobMaster</button>
+            <button class="tab-btn" onclick="switchTab('alljobs')">AllJobs</button>
+        </nav>
+
+        <!-- Total Tab -->
+        <section id="total-tab" class="tab-content active">
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="metric-value" id="totalJobs">-</div>
+                    <span class="metric-label">משרות שנאספו</span>
                 </div>
-
-                <div class="card">
-                    <div class="card-title">חברות</div>
-                    <div class="card-value" id="totalCompanies">-</div>
-                    <div class="card-subtitle">חברות שונות</div>
+                <div class="metric-item">
+                    <div class="metric-value" id="totalCompanies">-</div>
+                    <span class="metric-label">חברות ייחודיות</span>
                 </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="totalLocations">-</div>
+                    <span class="metric-label">מיקומים</span>
+                </div>
+            </div>
+        </section>
 
-                <div class="card">
-                    <div class="card-title">מיקומים</div>
-                    <div class="card-value" id="totalLocations">-</div>
-                    <div class="card-subtitle">מיקומים שונים</div>
+        <!-- JobMaster Tab -->
+        <section id="jobmaster-tab" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-item is-running" id="jm-jobs-container">
+                    <div class="metric-value">
+                        <span class="live-indicator"></span>
+                        <span id="jm-total-jobs">-</span>
+                    </div>
+                    <span class="metric-label">משרות שנאספו</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="jm-total-companies">-</div>
+                    <span class="metric-label">חברות ייחודיות</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="jm-total-locations">-</div>
+                    <span class="metric-label">מיקומים</span>
                 </div>
             </div>
 
-            <div class="last-scraping">
-                <h2>📅 סקריפינג אחרון</h2>
-                <div id="lastScrapingContent">
-                    <div class="info-row">
-                        <span class="info-label">תאריך התחלה:</span>
-                        <span class="info-value" id="startedAt">-</span>
+            <div class="live-status-section">
+                <div class="status-badge">
+                    <span id="jm-status-icon">●</span>
+                    <span id="jm-status-text">Scraper בהמתנה</span>
+                </div>
+                
+                <div class="live-counters-container">
+                    <div class="live-counter-item">
+                        <div class="counter-value" id="jm-pages-live">-</div>
+                        <span class="counter-label">עמודים נסרקו</span>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">תאריך סיום:</span>
-                        <span class="info-value" id="completedAt">-</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">עמודים נסרקו:</span>
-                        <span class="info-value" id="pagesScraped">-</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">משרות נמצאו:</span>
-                        <span class="info-value" id="jobsFound">-</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">סטטוס:</span>
-                        <span class="info-value" id="status">-</span>
+                    <div class="live-counter-item" style="border-right: 2px solid var(--border-subtle); padding-right: 30px;">
+                        <div class="counter-value" id="jm-found-live" style="color: var(--accent-color);">-</div>
+                        <span class="counter-label">משרות בריצה זו</span>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <div class="actions-container">
+                <button class="btn btn-primary" id="jm-start-btn" onclick="startScraper('jobmaster')">הפעל סקריפינג</button>
+                <button class="btn btn-secondary" id="jm-stop-btn" onclick="stopScraper('jobmaster')" disabled>עצור פעולה</button>
+                <div class="last-run-info" id="jm-last-run">-</div>
+            </div>
+
+            <div class="last-scraping-section">
+                <h2>סטטיסטיקות מפורטות - JobMaster</h2>
+                <div id="jm-last-scraping-content"></div>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-subtle);">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">משרות היום</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="jm-today-jobs">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">סה"כ ריצות</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="jm-total-sessions">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">ריצות מוצלחות</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="jm-completed-sessions">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- AllJobs Tab -->
+        <section id="alljobs-tab" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-item is-running" id="aj-jobs-container">
+                    <div class="metric-value">
+                        <span class="live-indicator"></span>
+                        <span id="aj-total-jobs">-</span>
+                    </div>
+                    <span class="metric-label">משרות שנאספו</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="aj-total-companies">-</div>
+                    <span class="metric-label">חברות ייחודיות</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="aj-total-locations">-</div>
+                    <span class="metric-label">מיקומים</span>
+                </div>
+            </div>
+
+            <div class="live-status-section">
+                <div class="status-badge">
+                    <span id="aj-status-icon">●</span>
+                    <span id="aj-status-text">Scraper בהמתנה</span>
+                </div>
+                
+                <div class="live-counters-container">
+                    <div class="live-counter-item">
+                        <div class="counter-value" id="aj-pages-live">-</div>
+                        <span class="counter-label">עמודים נסרקו</span>
+                    </div>
+                    <div class="live-counter-item" style="border-right: 2px solid var(--border-subtle); padding-right: 30px;">
+                        <div class="counter-value" id="aj-found-live" style="color: var(--accent-color);">-</div>
+                        <span class="counter-label">משרות בריצה זו</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions-container">
+                <button class="btn btn-primary" id="aj-start-btn" onclick="startScraper('alljobs')">הפעל סקריפינג</button>
+                <button class="btn btn-secondary" id="aj-stop-btn" onclick="stopScraper('alljobs')" disabled>עצור פעולה</button>
+                <div class="last-run-info" id="aj-last-run">-</div>
+            </div>
+
+            <div class="last-scraping-section">
+                <h2>סטטיסטיקות מפורטות - AllJobs</h2>
+                <div id="aj-last-scraping-content"></div>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-subtle);">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">משרות היום</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="aj-today-jobs">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">סה"כ ריצות</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="aj-total-sessions">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">ריצות מוצלחות</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="aj-completed-sessions">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script>
-        function formatDate(dateString) {
-            if (!dateString) return 'לא זמין';
-            const date = new Date(dateString);
-            return date.toLocaleString('he-IL', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
+        let statusCheckInterval = null;
 
-        function timeAgo(dateString) {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            const now = new Date();
-            const diff = now - date;
-            const minutes = Math.floor(diff / 60000);
-            const hours = Math.floor(minutes / 60);
-            const days = Math.floor(hours / 24);
-
-            if (days > 0) return `לפני ${days} ימים`;
-            if (hours > 0) return `לפני ${hours} שעות`;
-            if (minutes > 0) return `לפני ${minutes} דקות`;
-            return 'עכשיו';
-        }
-
-        function formatStatus(status) {
-            const statusMap = {
-                'completed': { text: 'הושלם', class: 'status-completed' },
-                'running': { text: 'בתהליך', class: 'status-running' },
-                'failed': { text: 'נכשל', class: 'status-failed' }
-            };
-            return statusMap[status] || { text: status, class: '' };
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.currentTarget.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
         }
 
         async function loadDashboard() {
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            const dashboard = document.getElementById('dashboard');
-
-            loading.style.display = 'block';
-            error.style.display = 'none';
-            dashboard.style.display = 'none';
-
             try {
                 const response = await fetch('/api/dashboard');
-                const result = await response.json();
+                const data = await response.json();
 
-                if (!result.success) {
-                    throw new Error(result.error || 'שגיאה בטעינת הנתונים');
-                }
+                // API returns data directly (no nested data.data)
+                const dashboardData = data;
+                
+                // Total stats
+                document.getElementById('totalJobs').textContent = (dashboardData.combined?.totalJobs || 0).toLocaleString('he-IL');
+                document.getElementById('totalCompanies').textContent = (dashboardData.combined?.uniqueCompanies || 0).toLocaleString('he-IL');
+                document.getElementById('totalLocations').textContent = (dashboardData.combined?.uniqueLocations || 0).toLocaleString('he-IL');
+                const totalTodayEl = document.getElementById('totalToday');
+                const totalJobTypesEl = document.getElementById('totalJobTypes');
+                if (totalTodayEl) totalTodayEl.textContent = (dashboardData.combined?.totalToday || 0).toLocaleString('he-IL');
+                if (totalJobTypesEl) totalJobTypesEl.textContent = (dashboardData.combined?.uniqueJobTypes || 0).toLocaleString('he-IL');
+                
+                // Platform breakdown in total tab
+                const totalAllJobsJobsEl = document.getElementById('total-alljobs-jobs');
+                const totalAllJobsTodayEl = document.getElementById('total-alljobs-today');
+                const totalJobMasterJobsEl = document.getElementById('total-jobmaster-jobs');
+                const totalJobMasterTodayEl = document.getElementById('total-jobmaster-today');
+                if (totalAllJobsJobsEl) totalAllJobsJobsEl.textContent = (dashboardData.alljobs?.totalJobs || 0).toLocaleString('he-IL');
+                if (totalAllJobsTodayEl) totalAllJobsTodayEl.textContent = (dashboardData.alljobs?.totalToday || 0).toLocaleString('he-IL');
+                if (totalJobMasterJobsEl) totalJobMasterJobsEl.textContent = (dashboardData.jobmaster?.totalJobs || 0).toLocaleString('he-IL');
+                if (totalJobMasterTodayEl) totalJobMasterTodayEl.textContent = (dashboardData.jobmaster?.totalToday || 0).toLocaleString('he-IL');
 
-                const data = result.data;
+                // Global statistics
+                const globalJobsEl = document.getElementById('global-total-jobs');
+                const globalCompaniesEl = document.getElementById('global-total-companies');
+                const globalLocationsEl = document.getElementById('global-total-locations');
+                if (globalJobsEl) globalJobsEl.textContent = (dashboardData.combined?.totalJobs || 0).toLocaleString('he-IL');
+                if (globalCompaniesEl) globalCompaniesEl.textContent = (dashboardData.combined?.uniqueCompanies || 0).toLocaleString('he-IL');
+                if (globalLocationsEl) globalLocationsEl.textContent = (dashboardData.combined?.uniqueLocations || 0).toLocaleString('he-IL');
 
-                // Update stats
-                document.getElementById('totalJobs').textContent = data.totalJobs.toLocaleString('he-IL');
-                document.getElementById('totalCompanies').textContent = data.totalCompanies.toLocaleString('he-IL');
-                document.getElementById('totalLocations').textContent = data.totalLocations.toLocaleString('he-IL');
+                // JobMaster stats
+                updateSourceStats('jm', dashboardData.jobmaster || {});
+                // Show active session if running, otherwise last session
+                const jmSessionToShow = dashboardData.jobmaster?.activeScrapingSession || dashboardData.jobmaster?.lastScrapingSession;
+                renderScrapingInfo('jm-last-scraping-content', jmSessionToShow);
+                updateLastRun('jm-last-run', jmSessionToShow);
+                
+                // Additional JobMaster stats
+                const jmTodayEl = document.getElementById('jm-today-jobs');
+                const jmTotalSessionsEl = document.getElementById('jm-total-sessions');
+                const jmCompletedSessionsEl = document.getElementById('jm-completed-sessions');
+                if (jmTodayEl) jmTodayEl.textContent = (dashboardData.jobmaster?.totalToday || 0).toLocaleString('he-IL');
+                if (jmTotalSessionsEl) jmTotalSessionsEl.textContent = (dashboardData.jobmaster?.totalSessions || 0).toLocaleString('he-IL');
+                if (jmCompletedSessionsEl) jmCompletedSessionsEl.textContent = (dashboardData.jobmaster?.completedSessions || 0).toLocaleString('he-IL');
 
-                // Update last scraping
-                if (data.lastScraping) {
-                    const last = data.lastScraping;
-                    document.getElementById('startedAt').innerHTML = formatDate(last.startedAt) + 
-                        ' <span class="time-ago">(' + timeAgo(last.startedAt) + ')</span>';
-                    document.getElementById('completedAt').innerHTML = last.completedAt 
-                        ? formatDate(last.completedAt) + ' <span class="time-ago">(' + timeAgo(last.completedAt) + ')</span>'
-                        : 'עדיין רץ...';
-                    document.getElementById('pagesScraped').textContent = last.pagesScraped.toLocaleString('he-IL');
-                    document.getElementById('jobsFound').textContent = last.jobsFound.toLocaleString('he-IL');
-                    
-                    const statusInfo = formatStatus(last.status);
-                    document.getElementById('status').innerHTML = 
-                        '<span class="status-badge ' + statusInfo.class + '">' + statusInfo.text + '</span>';
-                } else {
-                    document.getElementById('lastScrapingContent').innerHTML = 
-                        '<div class="info-row"><span class="info-label">אין נתוני סקריפינג</span></div>';
-                }
+                // AllJobs stats
+                updateSourceStats('aj', dashboardData.alljobs || {});
+                // Show active session if running, otherwise last session
+                const ajSessionToShow = dashboardData.alljobs?.activeScrapingSession || dashboardData.alljobs?.lastScrapingSession;
+                renderScrapingInfo('aj-last-scraping-content', ajSessionToShow);
+                updateLastRun('aj-last-run', ajSessionToShow);
+                
+                // Additional AllJobs stats
+                const ajTodayEl = document.getElementById('aj-today-jobs');
+                const ajTotalSessionsEl = document.getElementById('aj-total-sessions');
+                const ajCompletedSessionsEl = document.getElementById('aj-completed-sessions');
+                if (ajTodayEl) ajTodayEl.textContent = (dashboardData.alljobs?.totalToday || 0).toLocaleString('he-IL');
+                if (ajTotalSessionsEl) ajTotalSessionsEl.textContent = (dashboardData.alljobs?.totalSessions || 0).toLocaleString('he-IL');
+                if (ajCompletedSessionsEl) ajCompletedSessionsEl.textContent = (dashboardData.alljobs?.completedSessions || 0).toLocaleString('he-IL');
 
-                loading.style.display = 'none';
-                dashboard.style.display = 'block';
-            } catch (err) {
-                loading.style.display = 'none';
-                error.style.display = 'block';
-                error.textContent = 'שגיאה: ' + err.message;
+                // Check scraper statuses
+                await checkScraperStatus('jobmaster');
+                await checkScraperStatus('alljobs');
+                await updateGlobalStatus();
+                updateAllButtons();
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
             }
         }
 
-        // Load on page load
-        loadDashboard();
+        function updateSourceStats(prefix, data) {
+            document.getElementById(`${prefix}-total-jobs`).textContent = (data.totalJobs || 0).toLocaleString('he-IL');
+            document.getElementById(`${prefix}-total-companies`).textContent = (data.uniqueCompanies || 0).toLocaleString('he-IL');
+            document.getElementById(`${prefix}-total-locations`).textContent = (data.uniqueLocations || 0).toLocaleString('he-IL');
+            
+            // Update live counters from active session if running, otherwise from last session
+            const activeSession = data.activeScrapingSession || data.lastScrapingSession;
+            if (activeSession) {
+                document.getElementById(`${prefix}-pages-live`).textContent = (activeSession.pagesScraped || 0).toLocaleString('he-IL');
+                document.getElementById(`${prefix}-found-live`).textContent = (activeSession.jobsFound || 0).toLocaleString('he-IL');
+            } else {
+                document.getElementById(`${prefix}-pages-live`).textContent = '0';
+                document.getElementById(`${prefix}-found-live`).textContent = '0';
+            }
+        }
 
-        // Auto-refresh every 30 seconds
-        setInterval(loadDashboard, 30000);
+        function renderScrapingInfo(containerId, session) {
+            const container = document.getElementById(containerId);
+            if (!session) {
+                container.innerHTML = '<div style="color: var(--text-secondary);">אין נתונים</div>';
+                return;
+            }
+
+            const startDate = session.startedAt ? new Date(session.startedAt).toLocaleString('he-IL') : '-';
+            const endDate = session.completedAt ? new Date(session.completedAt).toLocaleString('he-IL') : '-';
+            const status = session.status || 'unknown';
+            
+            let statusBadge = '';
+            if (status === 'completed') {
+                statusBadge = '<span class="status-badge-completed">הושלם</span>';
+            } else if (status === 'running') {
+                statusBadge = '<span class="status-badge-running">פועל</span>';
+            } else {
+                statusBadge = '<span class="status-badge-stopped">עצור</span>';
+            }
+
+            container.innerHTML = `
+                <div class="last-scraping-info">
+                    <div><span>תאריך התחלה:</span> <span>${startDate}</span></div>
+                    <div><span>תאריך סיום:</span> <span>${endDate}</span></div>
+                    <div><span>עמודים נסרקו:</span> <span>${session.pagesScraped || 0}</span></div>
+                    <div><span>משרות נמצאו:</span> <span>${session.jobsFound || 0}</span></div>
+                    <div><span>סטטוס:</span> <span>${statusBadge}</span></div>
+                </div>
+            `;
+        }
+
+        function updateLastRun(elementId, session) {
+            const element = document.getElementById(elementId);
+            if (!session || !session.completedAt) {
+                element.textContent = 'אין נתונים קודמים';
+                return;
+            }
+
+            const completedDate = new Date(session.completedAt);
+            const now = new Date();
+            const diffMs = now - completedDate;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            let timeAgo = '';
+            if (diffMins < 1) {
+                timeAgo = 'לפני פחות מדקה';
+            } else if (diffMins < 60) {
+                timeAgo = `לפני ${diffMins} דקות`;
+            } else if (diffHours < 24) {
+                timeAgo = `לפני ${diffHours} שעות`;
+            } else {
+                timeAgo = `לפני ${diffDays} ימים`;
+            }
+
+            element.textContent = `עדכון אחרון: ${timeAgo}`;
+        }
+
+        async function startScraper(source) {
+            try {
+                const response = await fetch(`/api/scrapers/${source}/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateScraperUI(source, true);
+                    updateGlobalStatus();
+                    updateAllButtons();
+                    // Silently start - no alerts
+                    console.log(`Scraper ${source} started successfully`);
+                } else {
+                    console.error(`Failed to start scraper: ${result.message}`);
+                    // Show error in UI instead of alert
+                    updateScraperUI(source, false);
+                }
+            } catch (error) {
+                console.error('Error starting scraper:', error);
+                updateScraperUI(source, false);
+            }
+        }
+
+        async function stopScraper(source) {
+            try {
+                const response = await fetch(`/api/scrapers/${source}/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateScraperUI(source, false);
+                    console.log(`Scraper ${source} stopped successfully`);
+                } else {
+                    console.error(`Failed to stop scraper: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Error stopping scraper:', error);
+            }
+        }
+
+        function updateScraperUI(source, isRunning) {
+            const prefix = source === 'jobmaster' ? 'jm' : 'aj';
+            const container = document.getElementById(`${prefix}-jobs-container`);
+            const statusIcon = document.getElementById(`${prefix}-status-icon`);
+            const statusText = document.getElementById(`${prefix}-status-text`);
+            const startBtn = document.getElementById(`${prefix}-start-btn`);
+            const stopBtn = document.getElementById(`${prefix}-stop-btn`);
+
+            if (isRunning) {
+                container.classList.add('is-running');
+                statusIcon.textContent = '●';
+                statusText.textContent = 'Scraper פעיל ורץ';
+                statusText.className = 'status-text-running';
+                startBtn.disabled = true;
+                startBtn.style.display = 'none';
+                stopBtn.disabled = false;
+                stopBtn.style.display = 'flex';
+                
+                // Start aggressive live updates when scraper is running
+                const updateKey = `${prefix}LiveUpdate`;
+                if (window[updateKey]) {
+                    clearInterval(window[updateKey]);
+                }
+                window[updateKey] = setInterval(() => {
+                    loadDashboard();
+                    checkScraperStatus(source);
+                }, 2000);
+            } else {
+                container.classList.remove('is-running');
+                statusIcon.textContent = '●';
+                statusText.textContent = 'Scraper נעצר';
+                statusText.className = '';
+                startBtn.disabled = false;
+                startBtn.style.display = 'flex';
+                stopBtn.disabled = true;
+                stopBtn.style.display = 'none';
+                
+                // Stop live updates when scraper stops
+                const updateKey = `${prefix}LiveUpdate`;
+                if (window[updateKey]) {
+                    clearInterval(window[updateKey]);
+                    window[updateKey] = null;
+                }
+            }
+        }
+
+        async function checkScraperStatus(source) {
+            try {
+                const response = await fetch(`/api/scrapers/${source}/status`);
+                const status = await response.json();
+                const isRunning = status.isRunning || false;
+                updateScraperUI(source, isRunning);
+                
+                // If running, also refresh dashboard data immediately
+                if (isRunning) {
+                    await loadDashboard();
+                }
+                if (typeof updateGlobalStatus === 'function') updateGlobalStatus();
+                if (typeof updateAllButtons === 'function') updateAllButtons();
+            } catch (error) {
+                console.error(`Error checking ${source} status:`, error);
+            }
+        }
+
+        // Start status checking interval
+        function startStatusChecking() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+            
+            // Check immediately on start
+            checkScraperStatus('alljobs');
+            checkScraperStatus('jobmaster');
+            loadDashboard();
+            
+            // Then check every 2 seconds
+            statusCheckInterval = setInterval(async () => {
+                await checkScraperStatus('alljobs');
+                await checkScraperStatus('jobmaster');
+                await loadDashboard();
+            }, 2000);
+        }
+
+        // Add missing functions if they don't exist
+        if (typeof startAllScrapers === 'undefined') {
+            window.startAllScrapers = async function() {
+                try {
+                    const response = await fetch('/api/scrapers/all/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success || result.results) {
+                        if (result.results && result.results.alljobs && result.results.alljobs.success) {
+                            updateScraperUI('alljobs', true);
+                        }
+                        if (result.results && result.results.jobmaster && result.results.jobmaster.success) {
+                            updateScraperUI('jobmaster', true);
+                        }
+                        if (typeof updateGlobalStatus === 'function') updateGlobalStatus();
+                        if (typeof updateAllButtons === 'function') updateAllButtons();
+                        console.log('All scrapers started');
+                    }
+                } catch (error) {
+                    console.error('Error starting all scrapers:', error);
+                }
+            };
+        }
+
+        if (typeof stopAllScrapers === 'undefined') {
+            window.stopAllScrapers = async function() {
+                try {
+                    const response = await fetch('/api/scrapers/all/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        updateScraperUI('alljobs', false);
+                        updateScraperUI('jobmaster', false);
+                        if (typeof updateGlobalStatus === 'function') updateGlobalStatus();
+                        if (typeof updateAllButtons === 'function') updateAllButtons();
+                        console.log('All scrapers stopped');
+                    }
+                } catch (error) {
+                    console.error('Error stopping all scrapers:', error);
+                }
+            };
+        }
+
+        if (typeof updateGlobalStatus === 'undefined') {
+            window.updateGlobalStatus = async function() {
+                try {
+                    const response = await fetch('/api/scrapers/all/status');
+                    const status = await response.json();
+                    
+                    if (status.success && status.data) {
+                        const alljobsRunning = status.data.alljobs && status.data.alljobs.isRunning || false;
+                        const jobmasterRunning = status.data.jobmaster && status.data.jobmaster.isRunning || false;
+                        
+                        const alljobsEl = document.getElementById('global-alljobs-status');
+                        const jobmasterEl = document.getElementById('global-jobmaster-status');
+                        if (alljobsEl) alljobsEl.textContent = `AllJobs: ${alljobsRunning ? 'פועל' : 'עצור'}`;
+                        if (jobmasterEl) jobmasterEl.textContent = `JobMaster: ${jobmasterRunning ? 'פועל' : 'עצור'}`;
+                        
+                        const dashboardResponse = await fetch('/api/dashboard');
+                        const dashboardData = await dashboardResponse.json();
+                        
+                        const alljobsCountEl = document.getElementById('global-alljobs-count');
+                        const jobmasterCountEl = document.getElementById('global-jobmaster-count');
+                        if (alljobsCountEl) alljobsCountEl.textContent = `${(dashboardData.alljobs?.totalJobs || 0).toLocaleString('he-IL')} משרות`;
+                        if (jobmasterCountEl) jobmasterCountEl.textContent = `${(dashboardData.jobmaster?.totalJobs || 0).toLocaleString('he-IL')} משרות`;
+                    }
+                } catch (error) {
+                    console.error('Error updating global status:', error);
+                }
+            };
+        }
+
+        if (typeof updateAllButtons === 'undefined') {
+            window.updateAllButtons = function() {
+                const alljobsBtn = document.getElementById('aj-start-btn');
+                const jobmasterBtn = document.getElementById('jm-start-btn');
+                const startAllBtn = document.getElementById('start-all-btn');
+                const stopAllBtn = document.getElementById('stop-all-btn');
+                
+                if (!startAllBtn || !stopAllBtn) return;
+                
+                const anyRunning = (alljobsBtn && alljobsBtn.disabled) || (jobmasterBtn && jobmasterBtn.disabled);
+                
+                if (anyRunning) {
+                    startAllBtn.style.display = 'none';
+                    stopAllBtn.style.display = 'flex';
+                } else {
+                    startAllBtn.style.display = 'flex';
+                    stopAllBtn.style.display = 'none';
+                }
+            };
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDashboard();
+            startStatusChecking();
+            if (typeof updateGlobalStatus === 'function') updateGlobalStatus();
+            if (typeof updateAllButtons === 'function') updateAllButtons();
+        });
     </script>
 </body>
 </html>
-

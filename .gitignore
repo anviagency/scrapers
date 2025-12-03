@@ -18,7 +18,11 @@ output/*.json
 # IDE files
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
+
+# Debug files
+debug/
 

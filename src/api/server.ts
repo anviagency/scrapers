@@ -2,540 +2,239 @@ import express from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import * as path from 'path';
+import * as fs from 'fs';
 import { createLogger } from '../utils/logger';
-import { DatabaseManager } from '../database/Database';
-import { DataExporter } from '../export/DataExporter';
+// DatabaseManager removed - using source-specific databases instead
+import { AllJobsDatabaseManager } from '../database/alljobs/AllJobsDatabaseManager';
+import { JobMasterDatabaseManager } from '../database/jobmaster/JobMasterDatabaseManager';
 import { swaggerSpec } from './swagger';
+import { createAllJobsRouter } from './routes/jobs/alljobs';
+import { createJobMasterRouter } from './routes/jobs/jobmaster';
+import { ScraperService } from './services/ScraperService';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const logger = createLogger('api-server');
 
-// Initialize database
-const dbPath = path.join(process.cwd(), 'data', 'alljobs.db');
-const db = new DatabaseManager(dbPath, logger);
+// Initialize databases
+const allJobsDbPath = path.join(process.cwd(), 'data', 'alljobs.db');
+const jobMasterDbPath = path.join(process.cwd(), 'data', 'jobmaster.db');
+const allJobsDb = new AllJobsDatabaseManager(allJobsDbPath, logger);
+const jobMasterDb = new JobMasterDatabaseManager(jobMasterDbPath, logger);
 
-// Initialize data exporter
+// Initialize scraper service
+const scraperService = new ScraperService(logger);
+
+// Legacy database removed - using source-specific databases instead
+
+// Output directory for exports (used by route handlers)
 const outputDir = path.join(process.cwd(), 'output');
-const exporter = new DataExporter(outputDir, logger);
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Serve static files from public directory
-app.use(express.static(path.join(process.cwd(), 'public')));
+const publicDir = path.join(process.cwd(), 'public');
+app.use(express.static(publicDir));
+logger.info('Serving static files from', { publicDir });
+
+// Dashboard route
+app.get('/dashboard', (_req, res) => {
+  const dashboardPath = path.join(publicDir, 'dashboard.html');
+  const absolutePath = path.resolve(dashboardPath);
+  
+  if (!fs.existsSync(absolutePath)) {
+    logger.error('Dashboard file not found', { absolutePath, publicDir });
+    res.status(404).json({ error: 'Dashboard file not found', path: absolutePath });
+    return;
+  }
+  
+  res.sendFile(absolutePath);
+});
+
+app.get('/dashboard.html', (_req, res) => {
+  const dashboardPath = path.join(publicDir, 'dashboard.html');
+  const absolutePath = path.resolve(dashboardPath);
+  
+  if (!fs.existsSync(absolutePath)) {
+    logger.error('Dashboard file not found', { absolutePath, publicDir });
+    res.status(404).json({ error: 'Dashboard file not found', path: absolutePath });
+    return;
+  }
+  
+  res.sendFile(absolutePath);
+});
 
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'AllJobs Scraper API Documentation',
+  customSiteTitle: 'Multi-Source Job Scraper API Documentation',
 }));
 
-/**
- * @swagger
- * /api/jobs:
- *   get:
- *     summary: Get all job listings
- *     description: Retrieve job listings with optional filtering and pagination. Supports Hebrew text in all fields.
- *     tags: [Jobs]
- *     parameters:
- *       - $ref: '#/components/parameters/LimitParam'
- *       - $ref: '#/components/parameters/OffsetParam'
- *       - $ref: '#/components/parameters/CompanyFilter'
- *       - $ref: '#/components/parameters/LocationFilter'
- *       - $ref: '#/components/parameters/JobTypeFilter'
- *       - $ref: '#/components/parameters/DateFromFilter'
- *       - $ref: '#/components/parameters/DateToFilter'
- *     responses:
- *       200:
- *         description: Successful response with job listings
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/JobsResponse'
- *             example:
- *               success: true
- *               data:
- *                 - jobId: "8391177"
- *                   title: "דרוש /ה עו\"ד בתחום המיסוי המוניציפאלי"
- *                   company: "חברה חסויה"
- *                   description: "משרדנו מתמחה במשפט מנהלי..."
- *                   location: "תל אביב"
- *                   jobType: "משרה מלאה"
- *                   applicationUrl: "/Search/UploadSingle.aspx?JobID=8391177"
- *               pagination:
- *                 total: 540
- *                 limit: 10
- *                 offset: 0
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
+// Mount source-specific routes
+app.use('/api/jobs/alljobs', createAllJobsRouter(logger, outputDir));
+app.use('/api/jobs/jobmaster', createJobMasterRouter(logger, outputDir));
+
+// Legacy routes (backward compatibility - redirect to alljobs)
 app.get('/api/jobs', (req, res) => {
-  try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
-    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
-    const company = req.query.company as string | undefined;
-    const location = req.query.location as string | undefined;
-    const jobType = req.query.jobType as string | undefined;
-    const dateFrom = req.query.dateFrom as string | undefined;
-    const dateTo = req.query.dateTo as string | undefined;
-
-    // Build filters object - only include defined values
-    const filters: {
-      limit?: number;
-      offset?: number;
-      company?: string;
-      location?: string;
-      jobType?: string;
-      dateFrom?: string;
-      dateTo?: string;
-    } = {};
-    if (limit !== undefined) filters.limit = limit;
-    if (offset !== undefined) filters.offset = offset;
-    if (company) filters.company = company;
-    if (location) filters.location = location;
-    if (jobType) filters.jobType = jobType;
-    if (dateFrom) filters.dateFrom = dateFrom;
-    if (dateTo) filters.dateTo = dateTo;
-
-    const jobs = db.getJobs(Object.keys(filters).length > 0 ? filters : undefined);
-    const total = db.getJobsCount(
-      company || location || jobType || dateFrom || dateTo
-        ? { company, location, jobType, dateFrom, dateTo }
-        : undefined
-    );
-
-    res.json({
-      success: true,
-      data: jobs,
-      pagination: {
-        total,
-        limit: limit || total,
-        offset: offset || 0,
-      },
-    });
-  } catch (error) {
-    logger.error('Failed to get jobs', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve jobs',
-    });
-  }
+  res.redirect(`/api/jobs/alljobs${req.url.includes('?') ? req.url.split('?')[1] : ''}`);
 });
-
-/**
- * @swagger
- * /api/jobs/count:
- *   get:
- *     summary: Get total count of jobs
- *     description: Get the total number of jobs matching optional filters. Useful for pagination.
- *     tags: [Jobs]
- *     parameters:
- *       - $ref: '#/components/parameters/CompanyFilter'
- *       - $ref: '#/components/parameters/LocationFilter'
- *       - $ref: '#/components/parameters/JobTypeFilter'
- *       - $ref: '#/components/parameters/DateFromFilter'
- *       - $ref: '#/components/parameters/DateToFilter'
- *     responses:
- *       200:
- *         description: Successful response with job count
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/CountResponse'
- *             example:
- *               success: true
- *               count: 540
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 app.get('/api/jobs/count', (req, res) => {
-  try {
-    const company = req.query.company as string | undefined;
-    const location = req.query.location as string | undefined;
-    const jobType = req.query.jobType as string | undefined;
-    const dateFrom = req.query.dateFrom as string | undefined;
-    const dateTo = req.query.dateTo as string | undefined;
-
-    const count = db.getJobsCount({ company, location, jobType, dateFrom, dateTo });
-
-    res.json({
-      success: true,
-      count,
-    });
-  } catch (error) {
-    logger.error('Failed to get jobs count', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve jobs count',
-    });
-  }
+  res.redirect(`/api/jobs/alljobs/count${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`);
 });
-
-/**
- * @swagger
- * /api/jobs/export/csv:
- *   get:
- *     summary: Export jobs to CSV format
- *     description: |
- *       Export all jobs matching optional filters to CSV format and download the file.
- *       The CSV file includes UTF-8 BOM for Excel compatibility with Hebrew text.
- *       
- *       **Note:** This endpoint returns a file download, not JSON.
- *       
- *       **Filters:**
- *       - Leave all filters empty to export ALL jobs
- *       - Use dateFrom/dateTo to filter by scraping date
- *       - Combine multiple filters for precise results
- *     tags: [Export]
- *     parameters:
- *       - $ref: '#/components/parameters/CompanyFilter'
- *       - $ref: '#/components/parameters/LocationFilter'
- *       - $ref: '#/components/parameters/JobTypeFilter'
- *       - name: dateFrom
- *         in: query
- *         description: Filter jobs scraped from this date (YYYY-MM-DD format)
- *         required: false
- *         schema:
- *           type: string
- *           format: date
- *           example: "2025-11-01"
- *       - name: dateTo
- *         in: query
- *         description: Filter jobs scraped until this date (YYYY-MM-DD format)
- *         required: false
- *         schema:
- *           type: string
- *           format: date
- *           example: "2025-11-30"
- *     responses:
- *       200:
- *         description: CSV file download
- *         content:
- *           text/csv:
- *             schema:
- *               type: string
- *               format: binary
- *       404:
- *         description: No jobs found to export
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               success: false
- *               error: "No jobs found to export"
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-app.get('/api/jobs/export/csv', async (req, res): Promise<void> => {
-  try {
-    const company = req.query.company as string | undefined;
-    const location = req.query.location as string | undefined;
-    const jobType = req.query.jobType as string | undefined;
-    const dateFrom = req.query.dateFrom as string | undefined;
-    const dateTo = req.query.dateTo as string | undefined;
-
-    // If no filters provided, get ALL jobs
-    const filters = (company || location || jobType || dateFrom || dateTo)
-      ? { company, location, jobType, dateFrom, dateTo }
-      : undefined;
-
-    // Get all jobs matching filters (no limit for export)
-    const jobs = db.getJobs(filters);
-
-    if (jobs.length === 0) {
-      res.status(404).json({
-        success: false,
-        error: 'No jobs found to export',
-        message: filters
-          ? 'No jobs match the provided filters. Try removing filters to export all jobs.'
-          : 'No jobs found in database. Please run the scraper first.',
-      });
-      return;
-    }
-
-    // Export to CSV
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `alljobs-export-${timestamp}`;
-    const csvPath = await exporter.exportToCsv(jobs, filename);
-
-    // Send file
-    res.download(csvPath, `alljobs-export-${timestamp}.csv`, (err) => {
-      if (err) {
-        logger.error('Failed to send CSV file', {
-          error: err.message,
-        });
-        if (!res.headersSent) {
-          res.status(500).json({
-            success: false,
-            error: 'Failed to download CSV file',
-          });
-        }
-      }
-    });
-    return;
-  } catch (error) {
-    logger.error('Failed to export CSV', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to export CSV',
-    });
-  }
+app.get('/api/jobs/export/csv', (req, res) => {
+  res.redirect(`/api/jobs/alljobs/export/csv${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`);
 });
-
-/**
- * @swagger
- * /api/jobs/export/json:
- *   get:
- *     summary: Export jobs to JSON format
- *     description: |
- *       Export all jobs matching optional filters to JSON format and download the file.
- *       The JSON file is formatted with 2-space indentation for readability.
- *       
- *       **Note:** This endpoint returns a file download, not JSON response.
- *     tags: [Export]
- *     parameters:
- *       - $ref: '#/components/parameters/CompanyFilter'
- *       - $ref: '#/components/parameters/LocationFilter'
- *       - $ref: '#/components/parameters/JobTypeFilter'
- *       - $ref: '#/components/parameters/DateFromFilter'
- *       - $ref: '#/components/parameters/DateToFilter'
- *     responses:
- *       200:
- *         description: JSON file download
- *         content:
- *           application/json:
- *             schema:
- *               type: string
- *               format: binary
- *       404:
- *         description: No jobs found to export
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               success: false
- *               error: "No jobs found to export"
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-app.get('/api/jobs/export/json', async (req, res): Promise<void> => {
-  try {
-    const company = req.query.company as string | undefined;
-    const location = req.query.location as string | undefined;
-    const jobType = req.query.jobType as string | undefined;
-    const dateFrom = req.query.dateFrom as string | undefined;
-    const dateTo = req.query.dateTo as string | undefined;
-
-    // If no filters provided, get ALL jobs
-    const filters = (company || location || jobType || dateFrom || dateTo)
-      ? { company, location, jobType, dateFrom, dateTo }
-      : undefined;
-
-    // Get all jobs matching filters
-    const jobs = db.getJobs(filters);
-
-    if (jobs.length === 0) {
-      res.status(404).json({
-        success: false,
-        error: 'No jobs found to export',
-        message: filters
-          ? 'No jobs match the provided filters. Try removing filters to export all jobs.'
-          : 'No jobs found in database. Please run the scraper first.',
-      });
-      return;
-    }
-
-    // Export to JSON
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `alljobs-export-${timestamp}`;
-    const jsonPath = await exporter.exportToJson(jobs, filename);
-
-    // Send file
-    res.download(jsonPath, `alljobs-export-${timestamp}.json`, (err) => {
-      if (err) {
-        logger.error('Failed to send JSON file', {
-          error: err.message,
-        });
-        if (!res.headersSent) {
-          res.status(500).json({
-            success: false,
-            error: 'Failed to download JSON file',
-          });
-        }
-      }
-    });
-    return;
-  } catch (error) {
-    logger.error('Failed to export JSON', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to export JSON',
-    });
-  }
+app.get('/api/jobs/export/json', (req, res) => {
+  res.redirect(`/api/jobs/alljobs/export/json${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`);
 });
-
-/**
- * @swagger
- * /api/jobs/filters/options:
- *   get:
- *     summary: Get available filter options
- *     description: |
- *       Returns all unique values for companies, locations, and job types available in the database.
- *       Useful for building filter dropdowns or understanding what data is available.
- *     tags: [Jobs]
- *     responses:
- *       200:
- *         description: Available filter options
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     companies:
- *                       type: array
- *                       items:
- *                         type: string
- *                       description: List of all unique company names
- *                     locations:
- *                       type: array
- *                       items:
- *                         type: string
- *                       description: List of all unique locations
- *                     jobTypes:
- *                       type: array
- *                       items:
- *                         type: string
- *                       description: List of all unique job types
- *             example:
- *               success: true
- *               data:
- *                 companies: ["חברה א", "חברה ב", "TechTalent"]
- *                 locations: ["תל אביב", "ירושלים", "Haifa", "Tel Aviv"]
- *                 jobTypes: ["משרה מלאה", "משרה חלקית", "משמרות"]
- *       500:
- *         description: Internal server error
- */
 app.get('/api/jobs/filters/options', (_req, res) => {
-  try {
-    // Get all jobs to extract unique values
-    const allJobs = db.getJobs();
-    
-    const companies = [...new Set(allJobs.map(job => job.company).filter(Boolean))].sort();
-    const locations = [...new Set(allJobs.map(job => job.location).filter(Boolean))].sort();
-    const jobTypes = [...new Set(allJobs.map(job => job.jobType).filter(Boolean))].sort();
-
-    res.json({
-      success: true,
-      data: {
-        companies,
-        locations,
-        jobTypes,
-        counts: {
-          totalJobs: allJobs.length,
-          uniqueCompanies: companies.length,
-          uniqueLocations: locations.length,
-          uniqueJobTypes: jobTypes.length,
-        },
-      },
-    });
-  } catch (error) {
-    logger.error('Failed to get filter options', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve filter options',
-    });
-  }
+  res.redirect('/api/jobs/alljobs/filters/options');
 });
+
+// Old routes removed - using redirects above for backward compatibility
+// Swagger documentation for legacy routes is maintained in swagger.ts
 
 /**
  * @swagger
  * /api/dashboard:
  *   get:
- *     summary: Get dashboard data
+ *     summary: Get dashboard statistics
  *     description: |
- *       Returns comprehensive dashboard data including:
- *       - Last scraping session information
- *       - Total statistics
- *       - Recent scraping history
+ *       Returns comprehensive dashboard data including statistics from all platforms and scraping session information.
+ *       
+ *       **Response Structure:**
+ *       - \`stats\`: Combined statistics from all platforms
+ *       - \`alljobs\`: AllJobs platform-specific statistics and sessions
+ *       - \`jobmaster\`: JobMaster platform-specific statistics and sessions
+ *       
+ *       **Use Cases:**
+ *       - Display overview dashboard
+ *       - Monitor scraping activity
+ *       - Track data growth per platform
+ *       - View recent scraping sessions
  *     tags: [Dashboard]
  *     responses:
  *       200:
- *         description: Dashboard data
+ *         description: Dashboard data with platform-specific statistics
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     lastScraping:
- *                       type: object
- *                       nullable: true
- *                     totalJobs:
- *                       type: number
- *                     totalCompanies:
- *                       type: number
- *                     totalLocations:
- *                       type: number
- *                     recentSessions:
- *                       type: array
+ *               $ref: '#/components/schemas/DashboardResponse'
+ *             example:
+ *               success: true
+ *               data:
+ *                 stats:
+ *                   totalJobs: 540
+ *                   uniqueCompanies: 120
+ *                   uniqueLocations: 45
+ *                   uniqueJobTypes: 3
+ *                 alljobs:
+ *                   totalJobs: 400
+ *                   uniqueCompanies: 100
+ *                   uniqueLocations: 35
+ *                   uniqueJobTypes: 3
+ *                   lastScrapingSession:
+ *                     id: 1
+ *                     startedAt: "2025-11-30 09:55:54"
+ *                     completedAt: "2025-11-30 10:59:33"
+ *                     pagesScraped: 1329
+ *                     jobsFound: 30688
+ *                     status: "completed"
+ *                 jobmaster:
+ *                   totalJobs: 140
+ *                   uniqueCompanies: 50
+ *                   uniqueLocations: 20
+ *                   uniqueJobTypes: 2
+ *                   lastScrapingSession: null
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 app.get('/api/dashboard', (_req, res) => {
   try {
-    const totalJobs = db.getJobsCount();
-    const allJobs = db.getJobs();
-    const companies = [...new Set(allJobs.map(job => job.company).filter(Boolean))];
-    const locations = [...new Set(allJobs.map(job => job.location).filter(Boolean))];
-    
-    const lastScraping = db.getLastScrapingSession();
-    const recentSessions = db.getScrapingSessions(5);
+    // Get AllJobs stats
+    const allJobsTotal = allJobsDb.getJobsCount();
+    const allJobsList = allJobsDb.getJobs({ limit: 1000 }); // Get sample for unique counts
+    const allJobsCompanies = [...new Set(allJobsList.map(job => job.company).filter(Boolean))];
+    const allJobsLocations = [...new Set(allJobsList.map(job => job.location).filter(Boolean))];
+    const allJobsJobTypes = [...new Set(allJobsList.map(job => job.jobType).filter(Boolean))];
+    const allJobsLastScraping = allJobsDb.getLastScrapingSession();
+    const allJobsSessions = allJobsDb.getScrapingSessions(5);
+
+    // Get JobMaster stats
+    const jobMasterTotal = jobMasterDb.getJobsCount();
+    const jobMasterList = jobMasterDb.getJobs({ limit: 1000 }); // Get sample for unique counts
+    const jobMasterCompanies = [...new Set(jobMasterList.map(job => job.company).filter(Boolean))];
+    const jobMasterLocations = [...new Set(jobMasterList.map(job => job.location).filter(Boolean))];
+    const jobMasterJobTypes = [...new Set(jobMasterList.map(job => job.jobType).filter(Boolean))];
+    const jobMasterLastScraping = jobMasterDb.getLastScrapingSession();
+    const jobMasterSessions = jobMasterDb.getScrapingSessions(5);
+
+    // Combined stats
+    const totalJobs = allJobsTotal + jobMasterTotal;
+    const totalCompanies = new Set([...allJobsCompanies, ...jobMasterCompanies]).size;
+    const totalLocations = new Set([...allJobsLocations, ...jobMasterLocations]).size;
+    const totalJobTypes = new Set([...allJobsJobTypes, ...jobMasterJobTypes]).size;
+
+    // Calculate additional statistics
+    const allJobsToday = allJobsDb.getJobsCount({
+      dateFrom: new Date().toISOString().split('T')[0],
+    });
+    const jobMasterToday = jobMasterDb.getJobsCount({
+      dateFrom: new Date().toISOString().split('T')[0],
+    });
+    const totalToday = allJobsToday + jobMasterToday;
+
+    // Get running sessions (get the most recent one)
+    // Sessions are sorted by started_at DESC, so the first one is the most recent
+    const allJobsRunningSessions = allJobsSessions.filter(s => s.status === 'running');
+    const jobMasterRunningSessions = jobMasterSessions.filter(s => s.status === 'running');
+    // Get the most recent running session (first in array, which is sorted by started_at DESC)
+    const allJobsActiveSession = allJobsRunningSessions.length > 0 ? allJobsRunningSessions[0] : null;
+    const jobMasterActiveSession = jobMasterRunningSessions.length > 0 ? jobMasterRunningSessions[0] : null;
 
     res.json({
       success: true,
-      data: {
-        lastScraping,
+      // Combined stats
+      combined: {
         totalJobs,
-        totalCompanies: companies.length,
-        totalLocations: locations.length,
-        recentSessions,
+        uniqueCompanies: totalCompanies,
+        uniqueLocations: totalLocations,
+        uniqueJobTypes: totalJobTypes,
+        totalToday,
+      },
+      // AllJobs source
+      alljobs: {
+        totalJobs: allJobsTotal,
+        uniqueCompanies: allJobsCompanies.length,
+        uniqueLocations: allJobsLocations.length,
+        uniqueJobTypes: allJobsJobTypes.length,
+        totalToday: allJobsToday,
+        lastScrapingSession: allJobsLastScraping,
+        activeScrapingSession: allJobsActiveSession,
+        scrapingSessions: allJobsSessions,
+        totalSessions: allJobsSessions.length,
+        completedSessions: allJobsSessions.filter(s => s.status === 'completed').length,
+        failedSessions: allJobsSessions.filter(s => s.status === 'failed').length,
+      },
+      // JobMaster source
+      jobmaster: {
+        totalJobs: jobMasterTotal,
+        uniqueCompanies: jobMasterCompanies.length,
+        uniqueLocations: jobMasterLocations.length,
+        uniqueJobTypes: jobMasterJobTypes.length,
+        totalToday: jobMasterToday,
+        lastScrapingSession: jobMasterLastScraping,
+        activeScrapingSession: jobMasterActiveSession,
+        scrapingSessions: jobMasterSessions,
+        totalSessions: jobMasterSessions.length,
+        completedSessions: jobMasterSessions.filter(s => s.status === 'completed').length,
+        failedSessions: jobMasterSessions.filter(s => s.status === 'failed').length,
       },
     });
   } catch (error) {
@@ -553,17 +252,26 @@ app.get('/api/dashboard', (_req, res) => {
  * @swagger
  * /api/stats:
  *   get:
- *     summary: Get statistics about scraped jobs
+ *     summary: Get combined statistics from all platforms
  *     description: |
- *       Retrieve comprehensive statistics about the scraped job listings including:
- *       - Total number of jobs
- *       - Number of unique companies
- *       - Number of unique locations
+ *       Retrieve comprehensive statistics about scraped job listings from all platforms combined.
+ *       
+ *       **Statistics Included:**
+ *       - Total number of jobs across all platforms
+ *       - Number of unique companies (deduplicated across platforms)
+ *       - Number of unique locations (deduplicated across platforms)
  *       - Jobs grouped by job type
+ *       - Job count per platform
+ *       
+ *       **Use Cases:**
+ *       - Display overall statistics
+ *       - Compare data volume between platforms
+ *       - Analyze job type distribution
+ *       - Monitor data growth
  *     tags: [Statistics]
  *     responses:
  *       200:
- *         description: Successful response with statistics
+ *         description: Successful response with combined statistics
  *         content:
  *           application/json:
  *             schema:
@@ -577,6 +285,9 @@ app.get('/api/dashboard', (_req, res) => {
  *                 jobsByType:
  *                   "משרה מלאה": 400
  *                   "משרה חלקית": 140
+ *                 sources:
+ *                   alljobs: 400
+ *                   jobmaster: 140
  *       500:
  *         description: Internal server error
  *         content:
@@ -586,32 +297,34 @@ app.get('/api/dashboard', (_req, res) => {
  */
 app.get('/api/stats', (_req, res) => {
   try {
-    const totalJobs = db.getJobsCount();
+    // Combined stats from both sources
+    const allJobsTotal = allJobsDb.getJobsCount();
+    const jobMasterTotal = jobMasterDb.getJobsCount();
+    const totalJobs = allJobsTotal + jobMasterTotal;
 
-    // Get unique companies count
-    const companiesStmt = db.getDb().prepare('SELECT COUNT(DISTINCT company) as count FROM jobs');
-    const companiesResult = companiesStmt.get() as { count: number };
-
-    // Get unique locations count
-    const locationsStmt = db.getDb().prepare('SELECT COUNT(DISTINCT location) as count FROM jobs');
-    const locationsResult = locationsStmt.get() as { count: number };
-
+    // Get unique companies count from both sources
+    const allJobsList = allJobsDb.getJobs({ limit: 10000 });
+    const jobMasterList = jobMasterDb.getJobs({ limit: 10000 });
+    const allCompanies = new Set([...allJobsList.map((j: { company: string }) => j.company), ...jobMasterList.map((j: { company: string }) => j.company)]);
+    const allLocations = new Set([...allJobsList.map((j: { location: string }) => j.location), ...jobMasterList.map((j: { location: string }) => j.location)]);
+    
     // Get jobs by type
-    const jobTypesStmt = db.getDb().prepare(
-      'SELECT job_type, COUNT(*) as count FROM jobs GROUP BY job_type'
-    );
-    const jobTypes = jobTypesStmt.all() as Array<{ job_type: string; count: number }>;
+    const jobsByType: Record<string, number> = {};
+    [...allJobsList, ...jobMasterList].forEach((job: { jobType: string }) => {
+      jobsByType[job.jobType] = (jobsByType[job.jobType] || 0) + 1;
+    });
 
     res.json({
       success: true,
       data: {
         totalJobs,
-        uniqueCompanies: companiesResult.count,
-        uniqueLocations: locationsResult.count,
-        jobsByType: jobTypes.reduce((acc, item) => {
-          acc[item.job_type] = item.count;
-          return acc;
-        }, {} as Record<string, number>),
+        uniqueCompanies: allCompanies.size,
+        uniqueLocations: allLocations.size,
+        jobsByType,
+        sources: {
+          alljobs: allJobsTotal,
+          jobmaster: jobMasterTotal,
+        },
       },
     });
   } catch (error) {
@@ -627,14 +340,301 @@ app.get('/api/stats', (_req, res) => {
 
 /**
  * @swagger
+ * /api/scrapers/all/start:
+ *   post:
+ *     summary: Start all scrapers
+ *     description: Start both AllJobs and JobMaster scrapers simultaneously
+ *     tags: [Scrapers]
+ *     responses:
+ *       200:
+ *         description: All scrapers started successfully
+ */
+app.post('/api/scrapers/all/start', async (_req, res) => {
+  try {
+    const results = {
+      alljobs: await scraperService.startScraper('alljobs'),
+      jobmaster: await scraperService.startScraper('jobmaster'),
+    };
+
+    const allSuccess = results.alljobs.success && results.jobmaster.success;
+    const statusCode = allSuccess ? 200 : 207; // 207 Multi-Status
+
+    res.status(statusCode).json({
+      success: allSuccess,
+      results,
+    });
+  } catch (error) {
+    logger.error('Failed to start all scrapers', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start all scrapers',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/scrapers/all/stop:
+ *   post:
+ *     summary: Stop all scrapers
+ *     description: Stop both AllJobs and JobMaster scrapers
+ *     tags: [Scrapers]
+ *     responses:
+ *       200:
+ *         description: All scrapers stopped successfully
+ */
+app.post('/api/scrapers/all/stop', (_req, res) => {
+  try {
+    const results = {
+      alljobs: scraperService.stopScraper('alljobs'),
+      jobmaster: scraperService.stopScraper('jobmaster'),
+    };
+
+    res.json({
+      success: true,
+      results,
+    });
+  } catch (error) {
+    logger.error('Failed to stop all scrapers', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to stop all scrapers',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/scrapers/all/status:
+ *   get:
+ *     summary: Get status of all scrapers
+ *     description: Get the current status of all scrapers
+ *     tags: [Scrapers]
+ *     responses:
+ *       200:
+ *         description: Status of all scrapers
+ */
+app.get('/api/scrapers/all/status', (_req, res) => {
+  try {
+    const allStatuses = scraperService.getAllScraperStatuses();
+    const allJobsLastSession = allJobsDb.getLastScrapingSession();
+    const jobMasterLastSession = jobMasterDb.getLastScrapingSession();
+
+    res.json({
+      success: true,
+      data: {
+        alljobs: {
+          ...allStatuses.get('alljobs'),
+          lastSession: allJobsLastSession,
+        },
+        jobmaster: {
+          ...allStatuses.get('jobmaster'),
+          lastSession: jobMasterLastSession,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to get all scrapers status', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get all scrapers status',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/scrapers/{source}/start:
+ *   post:
+ *     summary: Start a scraper manually
+ *     description: |
+ *       Start a scraper process for the specified source (alljobs or jobmaster).
+ *       The scraper will run in the background and update the database incrementally.
+ *     tags: [Scrapers]
+ *     parameters:
+ *       - name: source
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [alljobs, jobmaster]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               maxPages:
+ *                 type: integer
+ *               resumeFromPage:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Scraper started successfully
+ *       400:
+ *         description: Scraper already running
+ *       500:
+ *         description: Failed to start scraper
+ */
+app.post('/api/scrapers/:source/start', async (req, res) => {
+  try {
+    const { source } = req.params;
+    if (source !== 'alljobs' && source !== 'jobmaster') {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid source. Must be "alljobs" or "jobmaster"',
+      });
+      return;
+    }
+
+    const { maxPages, resumeFromPage } = req.body;
+    const result = await scraperService.startScraper(source as 'alljobs' | 'jobmaster', {
+      maxPages: maxPages ? parseInt(String(maxPages), 10) : undefined,
+      resumeFromPage: resumeFromPage ? parseInt(String(resumeFromPage), 10) : undefined,
+    });
+
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    logger.error('Failed to start scraper', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start scraper',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/scrapers/{source}/stop:
+ *   post:
+ *     summary: Stop a running scraper
+ *     description: Stop a currently running scraper process.
+ *     tags: [Scrapers]
+ *     parameters:
+ *       - name: source
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [alljobs, jobmaster]
+ *     responses:
+ *       200:
+ *         description: Scraper stopped successfully
+ *       400:
+ *         description: Scraper is not running
+ */
+app.post('/api/scrapers/:source/stop', (req, res) => {
+  try {
+    const { source } = req.params;
+    if (source !== 'alljobs' && source !== 'jobmaster') {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid source. Must be "alljobs" or "jobmaster"',
+      });
+      return;
+    }
+
+    const result = scraperService.stopScraper(source as 'alljobs' | 'jobmaster');
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    logger.error('Failed to stop scraper', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to stop scraper',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/scrapers/{source}/status:
+ *   get:
+ *     summary: Get scraper status
+ *     description: Get the current status of a scraper, including whether it's running and the last scraping session.
+ *     tags: [Scrapers]
+ *     parameters:
+ *       - name: source
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [alljobs, jobmaster]
+ *     responses:
+ *       200:
+ *         description: Scraper status
+ */
+app.get('/api/scrapers/:source/status', (req, res) => {
+  try {
+    const { source } = req.params;
+    if (source !== 'alljobs' && source !== 'jobmaster') {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid source. Must be "alljobs" or "jobmaster"',
+      });
+      return;
+    }
+
+    const status = scraperService.getScraperStatus(source as 'alljobs' | 'jobmaster');
+    const db = source === 'alljobs' ? allJobsDb : jobMasterDb;
+    const lastSession = db.getLastScrapingSession();
+
+    res.json({
+      success: true,
+      isRunning: status.isRunning,
+      processId: status.processId,
+      lastSession,
+    });
+  } catch (error) {
+    logger.error('Failed to get scraper status', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get scraper status',
+    });
+  }
+});
+
+
+/**
+ * @swagger
  * /health:
  *   get:
  *     summary: Health check endpoint
- *     description: Check if the API server is running and responsive. Returns current server timestamp.
+ *     description: |
+ *       Check if the API server is running and responsive.
+ *       
+ *       **Use Cases:**
+ *       - Monitor server availability
+ *       - Load balancer health checks
+ *       - Automated monitoring systems
+ *       - Verify API connectivity
+ *       
+ *       **Response:**
+ *       - \`status\`: Always "ok" when server is running
+ *       - \`timestamp\`: Current server time in ISO 8601 format
  *     tags: [Health]
  *     responses:
  *       200:
- *         description: Server is healthy
+ *         description: Server is healthy and responsive
  *         content:
  *           application/json:
  *             schema:
@@ -677,13 +677,15 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
   logger.info('Shutting down API server');
-  db.close();
+  allJobsDb.close();
+  jobMasterDb.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   logger.info('Shutting down API server');
-  db.close();
+  allJobsDb.close();
+  jobMasterDb.close();
   process.exit(0);
 });
 

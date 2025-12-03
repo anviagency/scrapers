@@ -4,7 +4,7 @@ import type { PaginationManager } from './PaginationManager';
 import type { DataExporter } from '../export/DataExporter';
 import type { Logger } from '../utils/logger';
 import type { JobListing } from '../types/JobListing';
-import type { DatabaseManager } from '../database/Database';
+import type { AllJobsDatabaseManager } from '../database/alljobs/AllJobsDatabaseManager';
 
 /**
  * Scraping options
@@ -38,7 +38,7 @@ export class AllJobsScraper {
   private readonly paginationManager: PaginationManager;
   private readonly exporter: DataExporter;
   private readonly logger: Logger;
-  private readonly database?: DatabaseManager;
+  private readonly database?: AllJobsDatabaseManager;
 
   /**
    * Creates a new AllJobsScraper instance
@@ -54,7 +54,7 @@ export class AllJobsScraper {
     paginationManager: PaginationManager,
     exporter: DataExporter,
     logger: Logger,
-    database?: DatabaseManager
+    database?: AllJobsDatabaseManager
   ) {
     this.httpClient = httpClient;
     this.parser = parser;

@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
+    "dev:jobmaster": "ts-node src/scrapers/jobmaster/index.ts",
     "api": "ts-node src/api/server.ts",
     "test": "vitest",
     "test:watch": "vitest --watch",
