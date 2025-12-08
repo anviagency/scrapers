@@ -16,6 +16,9 @@ A comprehensive, production-ready RESTful API for accessing scraped job listings
 This API provides programmatic access to job listings scraped from multiple sources:
 - **AllJobs** (alljobs.co.il) - Israel's largest job board
 - **JobMaster** (jobmaster.co.il) - Professional job search platform
+- **Madlan** (madlan.co.il) - Real estate listings platform
+- **CarWiz** (carwiz.co.il) - Car listings platform (agency listings only)
+- **Freesbe** (freesbe.com) - Aggregated car listing data platform
 
 ## API Architecture
 
@@ -148,6 +151,22 @@ MIT License - See LICENSE file for details.
         description: 'Operations specific to AllJobs platform (alljobs.co.il)',
       },
       {
+        name: 'Cars',
+        description: 'Operations for retrieving car listings from car platforms',
+        externalDocs: {
+          description: 'Find out more about car listings',
+          url: 'https://example.com/docs/cars',
+        },
+      },
+      {
+        name: 'CarWiz',
+        description: 'Operations specific to CarWiz platform (carwiz.co.il)',
+      },
+      {
+        name: 'Freesbe',
+        description: 'Operations specific to Freesbe platform (freesbe.com)',
+      },
+      {
         name: 'JobMaster',
         description: 'Operations specific to JobMaster platform (jobmaster.co.il)',
       },
@@ -162,6 +181,18 @@ MIT License - See LICENSE file for details.
       {
         name: 'Dashboard',
         description: 'Dashboard data and scraping session information',
+      },
+      {
+        name: 'Real Estate',
+        description: 'Operations for real estate platforms (נדלן)',
+        externalDocs: {
+          description: 'Real Estate API Documentation',
+          url: 'https://example.com/docs/realestate',
+        },
+      },
+      {
+        name: 'Madlan',
+        description: 'Operations for Madlan real estate platform (madlan.co.il)',
       },
       {
         name: 'Health',

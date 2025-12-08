@@ -266,73 +266,121 @@ export class JobMasterParser extends BaseParser {
       }
       
       // Extract "מתאים ל" (target audience) from description
+      // JobMaster structure: <div class="JobItemSubHeader">מתאים ל:</div><div>בני 50 פלוס, דובר שפות, חיילים משוחררים</div>
       let targetAudience = '';
-      const fullText = $('main, article, .job-content, .job-details').text();
-      const targetAudienceMatch = fullText.match(/מתאים ל:\s*([^\n]+)/);
-      if (targetAudienceMatch) {
-        targetAudience = targetAudienceMatch[1].trim();
+      const $targetAudienceHeader = $('.JobItemSubHeader:contains("מתאים ל")').first();
+      if ($targetAudienceHeader.length > 0) {
+        // Get the next sibling div that contains the actual text
+        const $targetAudienceDiv = $targetAudienceHeader.next('div').first();
+        if ($targetAudienceDiv.length > 0) {
+          targetAudience = $targetAudienceDiv.text().trim();
+        } else {
+          // Fallback: get text from parent or next element
+          const $parent = $targetAudienceHeader.parent();
+          const fullText = $parent.text();
+          const targetAudienceMatch = fullText.match(/מתאים ל:\s*([^\n]+)/);
+          if (targetAudienceMatch) {
+            targetAudience = targetAudienceMatch[1].trim();
+          }
+        }
+      }
+      
+      // Fallback: search in full text
+      if (!targetAudience || targetAudience.length < 3) {
+        const fullText = $('main, article, .job-content, .job-details').text();
+        const targetAudienceMatch = fullText.match(/מתאים ל:\s*([^\n]+)/);
+        if (targetAudienceMatch) {
+          targetAudience = targetAudienceMatch[1].trim();
+        }
       }
       
       // Extract full description from job detail page
+      // JobMaster uses #jobDescriptionContent div
       let fullDescription = '';
+      const $descContent = $('#jobDescriptionContent').first();
+      if ($descContent.length > 0) {
+        fullDescription = $descContent.text().trim();
+        // Clean up HTML entities and extra whitespace
+        fullDescription = fullDescription.replace(/\s+/g, ' ').trim();
+      }
       
-      // Try multiple selectors for full description
-      const descriptionSelectors = [
-        '.jobDescription',
-        '.job-description',
-        '.JobDescription',
-        '#jobDescription',
-        '[class*="description"]',
-        '.job-content',
-        '.job-details',
-        '.jobFullDescription',
-      ];
-      
-      for (const selector of descriptionSelectors) {
-        const $desc = $(selector).first();
-        if ($desc.length > 0) {
-          fullDescription = $desc.text().trim();
-          if (fullDescription.length > 50) break;
+      // Fallback: Try multiple selectors for full description
+      if (!fullDescription || fullDescription.length < 50) {
+        const descriptionSelectors = [
+          '.jobDescription',
+          '.job-description',
+          '.JobDescription',
+          '#jobDescription',
+          '[class*="description"]',
+          '.job-content',
+          '.job-details',
+          '.jobFullDescription',
+        ];
+        
+        for (const selector of descriptionSelectors) {
+          const $desc = $(selector).first();
+          if ($desc.length > 0) {
+            fullDescription = $desc.text().trim();
+            if (fullDescription.length > 50) break;
+          }
         }
       }
       
       // If no specific description element, try to get all text from main content area
       if (!fullDescription || fullDescription.length < 50) {
-        const $mainContent = $('.job-content, .job-details, .main-content, [class*="content"]').first();
+        const $mainContent = $('main article, article[class*="JobItem"]').first();
         if ($mainContent.length > 0) {
-          fullDescription = $mainContent.text().trim();
+          // Get text but exclude requirements section
+          const $mainClone = $mainContent.clone();
+          $mainClone.find('#jobRequirementsContent, .jobRequirements').remove();
+          fullDescription = $mainClone.text().trim();
         }
       }
       
       // Extract full requirements
+      // JobMaster uses #jobRequirementsContent div
       let fullRequirements = '';
-      const requirementsSelectors = [
-        '.jobRequirements',
-        '.job-requirements',
-        '.JobRequirements',
-        '#jobRequirements',
-        '[class*="requirement"]',
-        '[class*="דרישות"]',
-      ];
+      const $reqContent = $('#jobRequirementsContent').first();
+      if ($reqContent.length > 0) {
+        fullRequirements = $reqContent.text().trim();
+        // Clean up HTML entities and extra whitespace
+        fullRequirements = fullRequirements.replace(/\s+/g, ' ').trim();
+      }
       
-      for (const selector of requirementsSelectors) {
-        const $req = $(selector).first();
-        if ($req.length > 0) {
-          fullRequirements = $req.text().trim();
-          if (fullRequirements.length > 20) break;
+      // Fallback: Try multiple selectors
+      if (!fullRequirements || fullRequirements.length < 20) {
+        const requirementsSelectors = [
+          '.jobRequirements',
+          '.job-requirements',
+          '.JobRequirements',
+          '#jobRequirements',
+          '[class*="requirement"]',
+          '[class*="דרישות"]',
+        ];
+        
+        for (const selector of requirementsSelectors) {
+          const $req = $(selector).first();
+          if ($req.length > 0) {
+            fullRequirements = $req.text().trim();
+            if (fullRequirements.length > 20) break;
+          }
         }
       }
       
       // Look for requirements in structured format
       if (!fullRequirements || fullRequirements.length < 20) {
-        // Try to find requirements section
-        const $reqSection = $('*:contains("דרישות"), *:contains("דרוש"), *:contains("Requirements")').first();
+        // Try to find requirements section by text
+        const $reqSection = $('*:contains("דרישות המשרה"), *:contains("דרישות התפקיד")').first();
         if ($reqSection.length > 0) {
-          const $reqList = $reqSection.next('ul, ol, div');
-          if ($reqList.length > 0) {
+          const $reqList = $reqSection.next('div, ul, ol');
+          if ($reqList.length > 0 && $reqList.attr('id') === 'jobRequirementsContent') {
             fullRequirements = $reqList.text().trim();
           } else {
-            fullRequirements = $reqSection.text().trim();
+            // Try to find the content div after the header
+            const $nextDiv = $reqSection.next('div');
+            if ($nextDiv.length > 0) {
+              fullRequirements = $nextDiv.text().trim();
+            }
           }
         }
       }

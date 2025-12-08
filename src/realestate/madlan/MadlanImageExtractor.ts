@@ -124,7 +124,8 @@ export class MadlanImageExtractor {
           if (redirectUrl) {
             file.close();
             fs.unlinkSync(filePath);
-            return this.downloadFile(redirectUrl, filePath).then(resolve).catch(reject);
+            this.downloadFile(redirectUrl, filePath).then(resolve).catch(reject);
+            return;
           }
         }
 

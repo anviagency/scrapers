@@ -3,6 +3,7 @@ import { JobMasterParser } from './JobMasterParser';
 import { JobMasterPaginationManager } from './JobMasterPaginationManager';
 import { DataExporter } from '../../export/DataExporter';
 import { createLogger } from '../../utils/logger';
+import { ActivityLogger } from '../../monitoring/ActivityLogger';
 import { JobMasterDatabaseManager } from '../../database/jobmaster/JobMasterDatabaseManager';
 
 /**
@@ -293,16 +294,29 @@ export class MultiCategoryScraper {
         });
         this.logger.info(`═══════════════════════════════════════════════════════`);
 
-        // Small delay between categories to avoid overwhelming server
-        await this.delay(100);
+        // Minimal delay between categories for speed
+        await this.delay(50);
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         this.logger.error(`❌ FAILED CATEGORY: ${category}`, {
           category,
           categoryIndex: totalCategoriesScraped + 1,
           totalCategories: allCategories.length,
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage,
           errorStack: error instanceof Error ? error.stack : undefined,
         });
+        
+        // Log error activity
+        try {
+          const activityLogger = ActivityLogger.getInstance();
+          activityLogger.logError('jobmaster', errorMessage, {
+            category,
+            page: 0,
+          });
+        } catch {
+          // ActivityLogger not initialized, skip
+        }
+        
         // Continue with next category - don't stop on single category failure
         this.logger.info(`⏭️  Continuing to next category...`);
       }
@@ -373,6 +387,14 @@ export class MultiCategoryScraper {
         // Parse jobs from page
         const jobs = this.parser.parseJobListings(html, currentUrl);
         
+        // Log parsing activity
+        try {
+          const activityLogger = ActivityLogger.getInstance();
+          activityLogger.logParsing('jobmaster', startUrl, currentPage, jobs.length);
+        } catch {
+          // ActivityLogger not initialized, skip
+        }
+        
         // Filter out already scraped jobs
         const newJobs = jobs.filter(job => {
           if (this.scrapedJobIds.has(job.jobId)) {
@@ -382,10 +404,35 @@ export class MultiCategoryScraper {
           return true;
         });
 
-        // Skip fetching full job details for speed - use data from listing page
-        // This significantly speeds up scraping (saves ~200ms per job)
-        // The listing page already contains sufficient information
-        const jobsToSave = newJobs;
+        // Fetch full job details for each new job to get complete information
+        // This includes: full description, full requirements, category, targetAudience
+        const jobsToSave: typeof newJobs = [];
+        for (const job of newJobs) {
+          try {
+            const fullDetails = await this.parser.parseFullJobDetails(job.applicationUrl, this.httpClient);
+            if (fullDetails) {
+              // Merge full details with listing data
+              const enrichedJob = {
+                ...job,
+                description: fullDetails.description || job.description,
+                requirements: fullDetails.requirements || job.requirements,
+                category: fullDetails.category || job.category,
+                targetAudience: fullDetails.targetAudience || job.targetAudience,
+              };
+              jobsToSave.push(enrichedJob);
+            } else {
+              // If full details fetch failed, use listing data
+              jobsToSave.push(job);
+            }
+          } catch (error) {
+            // If full details fetch failed, use listing data
+            this.logger.debug('Failed to fetch full details, using listing data', {
+              jobId: job.jobId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            jobsToSave.push(job);
+          }
+        }
         
         this.logger.info(`📊 Page ${currentPage}: ${jobs.length} total, ${newJobs.length} new, ${jobs.length - newJobs.length} duplicates`, {
           category: startUrl,
@@ -397,27 +444,38 @@ export class MultiCategoryScraper {
           totalPagesInCategory: pagesScraped,
         });
 
-        // Track empty pages - only count if NO jobs found at all (not just duplicates)
-        // Don't stop on duplicates - they're expected when scraping multiple categories
+        // Track empty pages - count pages with only duplicates as "empty" for stopping logic
+        // This prevents the scraper from continuing indefinitely when all jobs are duplicates
         if (jobs.length === 0) {
           consecutiveEmptyPages++;
-          this.logger.debug('Empty page detected', {
+          this.logger.debug('Empty page detected (no jobs found)', {
             consecutiveEmptyPages,
             category: startUrl,
             page: currentPage,
           });
-          // Only stop if we have MANY consecutive empty pages
-          if (consecutiveEmptyPages >= options.maxConsecutiveEmptyPages) {
-            this.logger.warn('Too many consecutive empty pages, stopping category', {
-              consecutiveEmptyPages,
-              category: startUrl,
-              page: currentPage,
-            });
-            break;
-          }
+        } else if (newJobs.length === 0) {
+          // Page has jobs but all are duplicates - count towards empty pages
+          consecutiveEmptyPages++;
+          this.logger.debug('Page with only duplicates detected', {
+            consecutiveEmptyPages,
+            category: startUrl,
+            page: currentPage,
+            totalJobs: jobs.length,
+          });
         } else {
-          // Reset counter if we found any jobs (even if duplicates)
+          // Reset counter if we found NEW jobs
           consecutiveEmptyPages = 0;
+        }
+        
+        // Only stop if we have MANY consecutive pages with no new jobs
+        if (consecutiveEmptyPages >= options.maxConsecutiveEmptyPages) {
+          this.logger.info('Too many consecutive pages with no new jobs, stopping category', {
+            consecutiveEmptyPages,
+            category: startUrl,
+            page: currentPage,
+            totalJobsFound: jobsFound,
+          });
+          break;
         }
 
         // Save new jobs to database
@@ -426,6 +484,14 @@ export class MultiCategoryScraper {
             this.database.upsertJobs(jobsToSave);
             jobsFound += jobsToSave.length;
             pagesScraped++;
+            
+            // Log database activity
+            try {
+              const activityLogger = ActivityLogger.getInstance();
+              activityLogger.logDatabase('jobmaster', 'upsertJobs', jobsToSave.length);
+            } catch {
+              // ActivityLogger not initialized, skip
+            }
             
             // Update session incrementally
             if (this.sessionId !== null) {
@@ -436,9 +502,22 @@ export class MultiCategoryScraper {
               });
             }
           } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.logger.error('Failed to save jobs to database', {
-              error: error instanceof Error ? error.message : String(error),
+              error: errorMessage,
             });
+            
+            // Log error activity
+            try {
+              const activityLogger = ActivityLogger.getInstance();
+              activityLogger.logError('jobmaster', errorMessage, {
+                operation: 'upsertJobs',
+                url: currentUrl,
+                page: currentPage,
+              });
+            } catch {
+              // ActivityLogger not initialized, skip
+            }
           }
         } else if (jobs.length > 0) {
           // Even if all jobs were duplicates, count the page
@@ -577,4 +656,5 @@ export class MultiCategoryScraper {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
+
 

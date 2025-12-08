@@ -24,38 +24,91 @@ export class MadlanParser {
    * @param listingType - Type of listing (sale, rent, commercial)
    * @returns Array of parsed listings
    */
-  parseListings(html: string, _pageUrl: string, listingType: ListingType): MadlanListing[] {
+  parseListings(html: string, pageUrl: string, listingType: ListingType): MadlanListing[] {
     try {
       const $ = cheerio.load(html);
       const listings: MadlanListing[] = [];
 
-      // TODO: Implement based on actual HTML structure after investigation
-      // This is a placeholder structure - will be updated after site investigation
+      // Try multiple selectors to find listing links
+      // 1. Direct links to listings
+      // 2. Links within listing containers
+      // 3. Article/section containers with links
       
-      // Try to find listing containers
-      // Common selectors to try:
-      // - div with class containing "listing", "property", "card"
-      // - links to individual listing pages
-      // - articles or sections containing listing data
+      const selectors = [
+        'a[href*="/listings/"]', // Main Madlan listing URL format: /listings/{ID}
+        'a[href*="/for-sale/"]',
+        'a[href*="/for-rent/"]',
+        'a[href*="/commercial/"]',
+        'a[href*="/property/"]',
+        'a[href*="/projects/"]', // Project links
+        '[class*="listing"] a[href]',
+        '[class*="property"] a[href]',
+        '[class*="card"] a[href]',
+      ];
 
-      $('a[href*="/for-sale/"], a[href*="/for-rent/"], a[href*="/commercial/"]').each((_, element) => {
-        try {
-          const $link = $(element);
-          const href = $link.attr('href');
-          
-          if (!href || href.includes('ישראל')) {
-            return; // Skip main category links
-          }
+      const foundLinks = new Set<string>();
 
-          const listingUrl = href.startsWith('http') ? href : `${this.baseUrl}${href}`;
-          
-          // Extract listing ID from URL
-          const listingIdMatch = listingUrl.match(/\/(\d+)/);
-          const listingId = listingIdMatch ? listingIdMatch[1] : listingUrl.split('/').pop() || '';
+      selectors.forEach(selector => {
+        $(selector).each((_, element) => {
+          try {
+            const $link = $(element);
+            const href = $link.attr('href');
+            
+            if (!href) {
+              return;
+            }
 
-          if (!listingId) {
-            return;
-          }
+            // Skip main category/navigation links
+            if (href.includes('ישראל') && !href.match(/\/\d+/) && !href.includes('תל-אביב') && !href.includes('ירושלים')) {
+              return; // Skip main category links without listing IDs
+            }
+
+            // Skip pagination and filter links
+            if (href.includes('?page=') || href.includes('?filter=') || href.includes('#') || href === '/' || href === '') {
+              return;
+            }
+
+            const listingUrl = href.startsWith('http') ? href : `${this.baseUrl}${href}`;
+            
+            // Skip if we've already processed this URL
+            if (foundLinks.has(listingUrl)) {
+              return;
+            }
+            
+            // Extract listing ID from URL - try multiple patterns
+            let listingId: string | null = null;
+            
+            // Pattern 1: Madlan listings format: /listings/{alphanumeric_ID}
+            const listingsMatch = listingUrl.match(/\/listings\/([A-Za-z0-9_-]+)/);
+            if (listingsMatch) {
+              listingId = listingsMatch[1];
+            } else {
+              // Pattern 2: Projects format: /projects/{name}
+              const projectsMatch = listingUrl.match(/\/projects\/([A-Za-z0-9_%\u0590-\u05FF_-]+)/);
+              if (projectsMatch) {
+                listingId = projectsMatch[1];
+              } else {
+                // Pattern 3: URL contains a long numeric ID
+                const longIdMatch = listingUrl.match(/\/(\d{15,})/);
+                if (longIdMatch) {
+                  listingId = longIdMatch[1];
+                } else {
+                  // Pattern 4: URL ends with alphanumeric ID
+                  const urlParts = listingUrl.split('/').filter(p => p && !p.includes('?') && !p.includes('#'));
+                  const lastPart = urlParts[urlParts.length - 1];
+                  if (lastPart && lastPart.match(/^[A-Za-z0-9_-]{5,}$/)) {
+                    listingId = lastPart;
+                  }
+                }
+              }
+            }
+
+            if (!listingId || listingId.length < 3) {
+              // Skip if no valid listing ID found (likely not a listing page)
+              return;
+            }
+
+            foundLinks.add(listingUrl);
 
           // Try to extract basic info from the listing card
           const title = $link.find('h2, h3, [class*="title"]').first().text().trim() || 
@@ -79,35 +132,44 @@ export class MadlanParser {
           // Determine agent type (will be refined after investigation)
           const agentType = this.detectAgentType($link);
 
-          const listing: MadlanListing = {
-            listingId,
-            title: title || 'Untitled Listing',
-            price,
-            rooms,
-            areaSqm,
-            city,
-            neighborhood,
-            address,
-            agentType,
-            listingType,
-            listingUrl,
-            features: [],
-          };
+            const listing: MadlanListing = {
+              listingId,
+              title: title || 'Untitled Listing',
+              price,
+              rooms,
+              areaSqm,
+              city,
+              neighborhood,
+              address,
+              agentType,
+              listingType,
+              listingUrl,
+              features: [],
+            };
 
-          listings.push(listing);
-        } catch (error) {
-          this.logger.warn('Failed to parse listing from search results', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
+            listings.push(listing);
+          } catch (error) {
+            this.logger.debug('Failed to parse potential listing link', {
+              error: error instanceof Error ? error.message : String(error),
+              href: $(element).attr('href'),
+            });
+          }
+        });
       });
+
+      // Deduplicate by listingId
+      const uniqueListings = Array.from(
+        new Map(listings.map(listing => [listing.listingId, listing])).values()
+      );
 
       this.logger.info('Parsed listings from search results', {
-        count: listings.length,
+        count: uniqueListings.length,
         listingType,
+        pageUrl,
+        totalLinksFound: foundLinks.size,
       });
 
-      return listings;
+      return uniqueListings;
     } catch (error) {
       this.logger.error('Failed to parse listings', {
         error: error instanceof Error ? error.message : String(error),

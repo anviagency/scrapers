@@ -22,6 +22,112 @@ export class JobListingParser {
   }
 
   /**
+   * Parses a job detail page HTML to extract all categories
+   * Extracts primary, secondary, and tertiary categories from the category box
+   * @param html - HTML content of the job detail page
+   * @param jobId - Job ID for logging purposes
+   * @returns Object with categories array and other extracted data
+   */
+  parseJobDetailPage(html: string, jobId: string): {
+    categories: string[];
+    fullDescription?: string;
+    fullRequirements?: string;
+  } {
+    try {
+      const $ = cheerio.load(html);
+      const categories: string[] = [];
+
+      // Strategy: Extract from CategoriesLinksOfJobSeoBox1_divJobCategoriesLinks (most reliable)
+      const $categoryBox = $('div#CategoriesLinksOfJobSeoBox1_divJobCategoriesLinks');
+      if ($categoryBox.length > 0) {
+        // Extract primary category from CategoriesLinksOfJobSeoBox1_PLink
+        const $primaryCategoryLink = $categoryBox.find('a#CategoriesLinksOfJobSeoBox1_PLink');
+        if ($primaryCategoryLink.length > 0) {
+          const primaryCategoryText = $primaryCategoryLink.text().trim();
+          if (primaryCategoryText && primaryCategoryText.length > 2) {
+            categories.push(primaryCategoryText);
+            this.logger.debug('Found primary category from CategoriesLinksOfJobSeoBox1_PLink', {
+              jobId,
+              category: primaryCategoryText,
+            });
+          }
+        }
+
+        // Extract secondary category from CategoriesLinksOfJobSeoBox1_ChLink
+        const $secondaryCategoryLink = $categoryBox.find('a#CategoriesLinksOfJobSeoBox1_ChLink');
+        if ($secondaryCategoryLink.length > 0) {
+          const secondaryCategoryText = $secondaryCategoryLink.text().trim();
+          if (secondaryCategoryText && secondaryCategoryText.length > 2 && !categories.includes(secondaryCategoryText)) {
+            categories.push(secondaryCategoryText);
+            this.logger.debug('Found secondary category from CategoriesLinksOfJobSeoBox1_ChLink', {
+              jobId,
+              category: secondaryCategoryText,
+            });
+          }
+        }
+
+        // Extract tertiary categories from all other links in category box
+        const $tertiaryLinks = $categoryBox
+          .find('a[id*="CategoriesLinksOfJobSeoBox1_"]')
+          .not('#CategoriesLinksOfJobSeoBox1_PLink')
+          .not('#CategoriesLinksOfJobSeoBox1_ChLink');
+        
+        $tertiaryLinks.each((_, el) => {
+          const tertiaryText = $(el).text().trim();
+          if (tertiaryText && tertiaryText.length > 2 && !categories.includes(tertiaryText)) {
+            categories.push(tertiaryText);
+            this.logger.debug('Found tertiary category', {
+              jobId,
+              category: tertiaryText,
+            });
+          }
+        });
+
+        // Fallback: Get all L_Orange links in the category box (if IDs not found)
+        if (categories.length === 0) {
+          const $orangeLinks = $categoryBox.find('a.L_Orange');
+          if ($orangeLinks.length > 0) {
+            $orangeLinks.each((_, el) => {
+              const categoryText = $(el).text().trim();
+              if (categoryText && categoryText.length > 2 && !categories.includes(categoryText)) {
+                categories.push(categoryText);
+              }
+            });
+            this.logger.debug('Found categories from L_Orange links', {
+              jobId,
+              categories,
+            });
+          }
+        }
+      }
+
+      // Extract full description if available
+      const fullDescription = $('.job-description, .JobDescription, #jobDescription, [class*="description"]')
+        .first()
+        .text()
+        .trim() || undefined;
+
+      // Extract full requirements if available
+      const fullRequirements = $('.job-requirements, .JobRequirements, [class*="requirement"]')
+        .first()
+        .text()
+        .trim() || undefined;
+
+      return {
+        categories,
+        fullDescription,
+        fullRequirements,
+      };
+    } catch (error) {
+      this.logger.error('Failed to parse job detail page', {
+        jobId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { categories: [] };
+    }
+  }
+
+  /**
    * Parses job listings from HTML content
    * @param html - HTML content to parse
    * @param pageUrl - URL of the page being parsed (for constructing absolute URLs)

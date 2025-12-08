@@ -179,6 +179,216 @@ CREATE INDEX IF NOT EXISTS idx_images_madlan_project_id ON images_madlan(project
 CREATE INDEX IF NOT EXISTS idx_sessions_madlan_status ON scraping_sessions_madlan(status);
 
 -- ============================================
+-- CarWiz Car Listings Tables
+-- ============================================
+
+-- Listings table for CarWiz - stores scraped car listings from carwiz.co.il
+-- Complete schema based on GraphQL API structure
+CREATE TABLE IF NOT EXISTS listings_carwiz (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- Core identification
+    car_id TEXT NOT NULL UNIQUE,
+    is_truck INTEGER DEFAULT 0,
+    details_view_count INTEGER,
+    
+    -- Timestamps
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    deleted_at DATETIME,
+    
+    -- Vehicle details - L1 (core data)
+    plate TEXT,
+    year INTEGER,
+    price REAL,
+    original_price REAL,
+    previous_price REAL,
+    previous_price_update_timestamp DATETIME,
+    price_discount INTEGER DEFAULT 0,
+    price_difference REAL DEFAULT 0,
+    kilometrage INTEGER,
+    hand INTEGER,
+    original_owner_id INTEGER,
+    original_owner_name TEXT,
+    future_tradein INTEGER DEFAULT 0,
+    parallel_import INTEGER DEFAULT 0,
+    condition TEXT,
+    
+    -- Colors
+    color_name TEXT,
+    color_name_v2 TEXT,
+    color_id TEXT,
+    accidents TEXT,
+    
+    -- Warranty and checks
+    warranty TEXT,
+    warranty_months INTEGER,
+    commitment_to_check TEXT,
+    
+    -- License details
+    license_validity DATETIME,
+    license_cost REAL,
+    
+    -- Financing
+    down_payment REAL,
+    monthly_payment REAL,
+    
+    -- Technical specification - L2 (stored as JSON for flexibility)
+    specification_json TEXT, -- JSON with makeName, modelName, finishLevel, engineDisplacement, gear, fuelType, etc.
+    make_name TEXT, -- Extracted from specification for indexing
+    model_name TEXT, -- Extracted from specification for indexing
+    finish_level TEXT,
+    engine_displacement INTEGER,
+    gear TEXT,
+    fuel_type TEXT,
+    category TEXT,
+    segment TEXT,
+    doors_count INTEGER,
+    seats_count INTEGER,
+    
+    -- Agency branch details (stored as JSON + key fields extracted)
+    agency_branch_json TEXT, -- Full JSON with all branch details
+    agency_id INTEGER,
+    agency_name TEXT,
+    agency_display_name TEXT,
+    agency_logo TEXT,
+    city TEXT,
+    address TEXT,
+    area_name TEXT,
+    district TEXT,
+    longitude REAL,
+    latitude REAL,
+    phone TEXT,
+    virtual_phone TEXT,
+    opening_hours_json TEXT, -- JSON with opening hours
+    
+    -- Images
+    images_json TEXT, -- JSON array of images.nodes
+    image_urls TEXT, -- Generated full URLs from images.nodes
+    jato_images_json TEXT, -- JSON array of jatoImages.nodes
+    jato_image_urls TEXT, -- Full URLs from jatoImages.nodes
+    
+    -- Insights (AI-ready data)
+    insights_json TEXT, -- JSON array of insights.nodes
+    
+    -- Additional fields
+    campaign_id TEXT,
+    is_allowed_trading INTEGER DEFAULT 1,
+    supply_days INTEGER,
+    parallel_import_model TEXT,
+    truck_spec_json TEXT,
+    
+    -- Computed/helper fields
+    listing_url TEXT,
+    
+    -- Database timestamps
+    db_created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    db_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Scraping sessions table for CarWiz - tracks scraping runs
+CREATE TABLE IF NOT EXISTS scraping_sessions_carwiz (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    pages_scraped INTEGER DEFAULT 0,
+    listings_found INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
+    error_message TEXT
+);
+
+-- Indexes for CarWiz tables
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_car_id ON listings_carwiz(car_id);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_make_name ON listings_carwiz(make_name);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_model_name ON listings_carwiz(model_name);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_year ON listings_carwiz(year);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_price ON listings_carwiz(price);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_city ON listings_carwiz(city);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_agency_id ON listings_carwiz(agency_id);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_agency_name ON listings_carwiz(agency_name);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_created_at ON listings_carwiz(created_at);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_updated_at ON listings_carwiz(updated_at);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_deleted_at ON listings_carwiz(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_fuel_type ON listings_carwiz(fuel_type);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_category ON listings_carwiz(category);
+CREATE INDEX IF NOT EXISTS idx_listings_carwiz_hand ON listings_carwiz(hand);
+CREATE INDEX IF NOT EXISTS idx_sessions_carwiz_status ON scraping_sessions_carwiz(status);
+
+-- ============================================
+-- Freesbe Car Listings Tables
+-- ============================================
+
+-- Listings table for Freesbe - stores aggregated car listing data from freesbe.com
+CREATE TABLE IF NOT EXISTS listings_freesbe (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    car_id TEXT NOT NULL UNIQUE,
+    make TEXT NOT NULL,
+    model TEXT NOT NULL,
+    year INTEGER,
+    version TEXT,
+    price REAL,
+    monthly_payment REAL,
+    mileage INTEGER,
+    hand INTEGER, -- יד (1, 2, etc.)
+    transmission TEXT, -- אוטומטי, ידני
+    fuel_type TEXT, -- בנזין, דיזל, היברידי, חשמלי
+    location TEXT,
+    city TEXT,
+    aggregated_data TEXT, -- JSON object with all aggregated data
+    images TEXT, -- JSON array of image URLs
+    listing_url TEXT NOT NULL,
+    posted_date TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Scraping sessions table for Freesbe - tracks scraping runs
+CREATE TABLE IF NOT EXISTS scraping_sessions_freesbe (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    pages_scraped INTEGER DEFAULT 0,
+    listings_found INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
+    error_message TEXT
+);
+
+-- Indexes for Freesbe tables
+CREATE INDEX IF NOT EXISTS idx_listings_freesbe_car_id ON listings_freesbe(car_id);
+CREATE INDEX IF NOT EXISTS idx_listings_freesbe_make ON listings_freesbe(make);
+CREATE INDEX IF NOT EXISTS idx_listings_freesbe_model ON listings_freesbe(model);
+CREATE INDEX IF NOT EXISTS idx_listings_freesbe_year ON listings_freesbe(year);
+CREATE INDEX IF NOT EXISTS idx_listings_freesbe_price ON listings_freesbe(price);
+CREATE INDEX IF NOT EXISTS idx_listings_freesbe_location ON listings_freesbe(location);
+CREATE INDEX IF NOT EXISTS idx_listings_freesbe_created_at ON listings_freesbe(created_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_freesbe_status ON scraping_sessions_freesbe(status);
+
+-- ============================================
+-- Shared Activities Table (for all scrapers)
+-- ============================================
+
+-- Activities table - stores all scraper activities (HTTP requests, parsing, database operations, errors)
+-- Shared across all scrapers for centralized monitoring
+CREATE TABLE IF NOT EXISTS activities_shared (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    activity_id TEXT NOT NULL UNIQUE,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    source TEXT NOT NULL CHECK(source IN ('alljobs', 'jobmaster', 'madlan', 'carwiz', 'freesbe')),
+    type TEXT NOT NULL CHECK(type IN ('http_request', 'parsing', 'database', 'error', 'proxy')),
+    status TEXT NOT NULL CHECK(status IN ('success', 'error', 'warning', 'retry')),
+    message TEXT NOT NULL,
+    details_json TEXT, -- JSON string of ActivityDetails
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for activities table
+CREATE INDEX IF NOT EXISTS idx_activities_shared_timestamp ON activities_shared(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_activities_shared_source ON activities_shared(source);
+CREATE INDEX IF NOT EXISTS idx_activities_shared_type ON activities_shared(type);
+CREATE INDEX IF NOT EXISTS idx_activities_shared_status ON activities_shared(status);
+CREATE INDEX IF NOT EXISTS idx_activities_shared_source_type ON activities_shared(source, type);
+CREATE INDEX IF NOT EXISTS idx_activities_shared_source_status ON activities_shared(source, status);
+
+-- ============================================
 -- Legacy Support (Backward Compatibility)
 -- ============================================
 -- Keep old table names as views/aliases for backward compatibility

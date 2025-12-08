@@ -58,11 +58,20 @@ export class MadlanDatabaseManager {
       }
 
       if (fs.existsSync(schemaPath)) {
-        const schema = fs.readFileSync(schemaPath, 'utf-8');
-        this.db.exec(schema);
-        this.logger.info('Database schema initialized from file', { schemaPath });
+        try {
+          const schema = fs.readFileSync(schemaPath, 'utf-8');
+          this.db.exec(schema);
+          this.logger.info('Database schema initialized from file', { schemaPath });
+        } catch (schemaError) {
+          // If schema file fails, create Madlan tables directly
+          this.logger.warn('Schema file failed, creating Madlan tables directly', {
+            error: schemaError instanceof Error ? schemaError.message : String(schemaError),
+          });
+          this.createMadlanTablesOnly();
+        }
       } else {
-        this.logger.warn('Schema file not found, schema should be created manually');
+        this.logger.warn('Schema file not found, creating Madlan tables directly');
+        this.createMadlanTablesOnly();
       }
     } catch (error) {
       this.logger.error('Failed to initialize database schema', {
@@ -70,6 +79,71 @@ export class MadlanDatabaseManager {
       });
       throw error;
     }
+  }
+
+  /**
+   * Creates only Madlan tables (fallback if full schema fails)
+   */
+  private createMadlanTablesOnly(): void {
+    // Create listings table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS listings_madlan (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        listing_id TEXT NOT NULL UNIQUE,
+        title TEXT,
+        price REAL,
+        property_type TEXT,
+        area_sqm REAL,
+        rooms REAL,
+        floor INTEGER,
+        address TEXT,
+        city TEXT,
+        neighborhood TEXT,
+        description TEXT,
+        features TEXT,
+        agent_type TEXT,
+        agent_name TEXT,
+        agent_phone TEXT,
+        listing_type TEXT,
+        listing_url TEXT,
+        posted_date TEXT,
+        updated_date TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create sessions table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS scraping_sessions_madlan (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completed_at DATETIME,
+        pages_scraped INTEGER DEFAULT 0,
+        listings_found INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
+        error_message TEXT
+      )
+    `);
+
+    // Create indexes
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_listings_madlan_listing_id ON listings_madlan(listing_id)',
+      'CREATE INDEX IF NOT EXISTS idx_listings_madlan_city ON listings_madlan(city)',
+      'CREATE INDEX IF NOT EXISTS idx_listings_madlan_listing_type ON listings_madlan(listing_type)',
+      'CREATE INDEX IF NOT EXISTS idx_listings_madlan_price ON listings_madlan(price)',
+      'CREATE INDEX IF NOT EXISTS idx_sessions_madlan_status ON scraping_sessions_madlan(status)',
+    ];
+
+    for (const indexSql of indexes) {
+      try {
+        this.db.exec(indexSql);
+      } catch {
+        // Ignore index creation errors
+      }
+    }
+
+    this.logger.info('Madlan tables created directly');
   }
 
   /**
@@ -373,6 +447,28 @@ export class MadlanDatabaseManager {
   }
 
   /**
+   * Gets count of listings in database
+   * @returns Total number of listings
+   */
+  getListingsCount(): number {
+    const sql = 'SELECT COUNT(*) as count FROM listings_madlan';
+    const stmt = this.db.prepare(sql);
+    const result = stmt.get() as { count: number };
+    return result?.count || 0;
+  }
+
+  /**
+   * Gets count of projects in database
+   * @returns Total number of projects
+   */
+  getProjectsCount(): number {
+    const sql = 'SELECT COUNT(*) as count FROM projects_madlan';
+    const stmt = this.db.prepare(sql);
+    const result = stmt.get() as { count: number };
+    return result?.count || 0;
+  }
+
+  /**
    * Gets listings with optional filters
    * @param filters - Optional filters
    * @returns Array of listings
@@ -558,6 +654,111 @@ export class MadlanDatabaseManager {
       description: row.description,
       imageUrls: [],
     };
+  }
+
+  /**
+   * Gets the last scraping session
+   * @returns Last scraping session info or null
+   */
+  getLastScrapingSession(): {
+    id: number;
+    startedAt: string;
+    completedAt: string | null;
+    pagesScraped: number;
+    listingsFound: number;
+    projectsFound: number;
+    imagesFound: number;
+    status: string;
+    errorMessage: string | null;
+  } | null {
+    try {
+      const stmt = this.db.prepare(
+        'SELECT * FROM scraping_sessions_madlan ORDER BY started_at DESC LIMIT 1'
+      );
+      const row = stmt.get() as {
+        id: number;
+        started_at: string;
+        completed_at: string | null;
+        pages_scraped: number;
+        listings_found: number;
+        projects_found: number;
+        images_found: number;
+        status: string;
+        error_message: string | null;
+      } | undefined;
+
+      if (!row) {
+        return null;
+      }
+
+      return {
+        id: row.id,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        pagesScraped: row.pages_scraped,
+        listingsFound: row.listings_found,
+        projectsFound: row.projects_found,
+        imagesFound: row.images_found,
+        status: row.status,
+        errorMessage: row.error_message,
+      };
+    } catch (error) {
+      this.logger.error('Failed to get last scraping session', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Gets scraping sessions history
+   * @param limit - Number of sessions to return
+   * @returns Array of scraping sessions
+   */
+  getScrapingSessions(limit: number = 10): Array<{
+    id: number;
+    startedAt: string;
+    completedAt: string | null;
+    pagesScraped: number;
+    listingsFound: number;
+    projectsFound: number;
+    imagesFound: number;
+    status: string;
+    errorMessage: string | null;
+  }> {
+    try {
+      const stmt = this.db.prepare(
+        'SELECT * FROM scraping_sessions_madlan ORDER BY started_at DESC LIMIT ?'
+      );
+      const rows = stmt.all(limit) as Array<{
+        id: number;
+        started_at: string;
+        completed_at: string | null;
+        pages_scraped: number;
+        listings_found: number;
+        projects_found: number;
+        images_found: number;
+        status: string;
+        error_message: string | null;
+      }>;
+
+      return rows.map(row => ({
+        id: row.id,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        pagesScraped: row.pages_scraped,
+        listingsFound: row.listings_found,
+        projectsFound: row.projects_found,
+        imagesFound: row.images_found,
+        status: row.status,
+        errorMessage: row.error_message,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to get scraping sessions', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
   }
 
   /**

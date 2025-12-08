@@ -1,6 +1,8 @@
 import * as dotenv from 'dotenv';
 import { HttpClient } from '../../http/HttpClient';
 import { EvomiProxyManager } from '../../proxy/EvomiProxyManager';
+import { ProxyStatusTracker } from '../../monitoring/ProxyStatusTracker';
+import { ActivityLogger } from '../../monitoring/ActivityLogger';
 import { JobMasterParser } from './JobMasterParser';
 import { JobMasterPaginationManager } from './JobMasterPaginationManager';
 import { DataExporter } from '../../export/DataExporter';
@@ -23,7 +25,7 @@ async function main(): Promise<void> {
     baseUrl: process.env.JOBMASTER_BASE_URL || 'https://www.jobmaster.co.il',
     evomiProxyKey: process.env.EVOMI_PROXY_KEY || '',
     evomiProxyEndpoint: process.env.EVOMI_PROXY_ENDPOINT,
-    rateLimitDelayMs: parseInt(process.env.JOBMASTER_RATE_LIMIT_DELAY_MS || '100', 10), // EXTREME: Reduced to 100ms for maximum speed
+    rateLimitDelayMs: parseInt(process.env.JOBMASTER_RATE_LIMIT_DELAY_MS || '50', 10), // ULTRA FAST: 50ms for maximum speed
     maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
     retryDelayMs: parseInt(process.env.RETRY_DELAY_MS || '1000', 10),
     logLevel: (process.env.LOG_LEVEL || 'info') as 'error' | 'warn' | 'info' | 'debug',
@@ -39,11 +41,37 @@ async function main(): Promise<void> {
 
   // Initialize components
   const logger = createLogger(config.logLevel);
-  const proxyManager = new EvomiProxyManager(config.evomiProxyKey, logger, config.evomiProxyEndpoint);
+  
+  logger.info('═══════════════════════════════════════════════════════');
+  logger.info('JOBMASTER SCRAPER STARTING');
+  logger.info('═══════════════════════════════════════════════════════');
+  
+  // Initialize monitoring components
+  const activityLogger = ActivityLogger.getInstance(logger);
+  const proxyStatusTracker = new ProxyStatusTracker(logger);
+  
+  // ENABLE PROXY - Required to avoid blocking and ensure complete scraping
+  const proxyKey = process.env.EVOMI_PROXY_KEY || config.evomiProxyKey || '';
+  const proxyEndpoint = process.env.EVOMI_PROXY_ENDPOINT || config.evomiProxyEndpoint;
+  const proxyManager = new EvomiProxyManager(proxyKey, logger, proxyEndpoint, proxyStatusTracker);
+  
+  if (proxyKey) {
+    logger.info('Using PROXY - required to avoid blocking and ensure complete scraping', {
+      proxyEndpoint: proxyEndpoint || 'default',
+    });
+    proxyStatusTracker.setEnabled(true);
+  } else {
+    logger.warn('No proxy key found - scraping may be blocked or incomplete');
+    proxyStatusTracker.setEnabled(false);
+  }
+  
   const httpClient = new HttpClient(proxyManager, logger, {
     rateLimitDelayMs: config.rateLimitDelayMs,
     maxRetries: config.maxRetries,
     retryDelayMs: config.retryDelayMs,
+    useProxy: !!proxyKey, // Enable proxy if key is provided
+    source: 'jobmaster',
+    activityLogger,
   });
   const parser = new JobMasterParser(logger, config.baseUrl);
   const paginationManager = new JobMasterPaginationManager(config.baseUrl, logger);

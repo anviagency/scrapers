@@ -356,6 +356,289 @@
                 margin-top: 10px; 
             }
         }
+
+        /* Monitoring Tab Styles */
+        .monitoring-card {
+            background: var(--bg-card);
+            border-radius: var(--card-radius);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .monitoring-card h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .monitoring-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .proxy-status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .proxy-status-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .proxy-status-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .proxy-status-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .proxy-status-value.healthy {
+            color: var(--success-color);
+        }
+
+        .proxy-status-value.unhealthy {
+            color: #ef4444;
+        }
+
+        .proxy-status-value.degraded {
+            color: #f59e0b;
+        }
+
+        .proxy-errors-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .proxy-errors-section h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+
+        #proxy-errors-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .error-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #fef2f2;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #991b1b;
+        }
+
+        .activity-log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .activity-filters {
+            display: flex;
+            gap: 10px;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border-subtle);
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover {
+            background: #f1f5f9;
+        }
+
+        .filter-btn.active {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        .activity-table-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+        }
+
+        .activity-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .activity-table thead {
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+            z-index: 10;
+        }
+
+        .activity-table th {
+            padding: 12px;
+            text-align: right;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border-subtle);
+            background: var(--bg-card);
+        }
+
+        .activity-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        .activity-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .activity-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-retry {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-source-alljobs {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .badge-source-jobmaster {
+            background: #fce7f3;
+            color: #831843;
+        }
+
+        .badge-source-madlan {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-source-carwiz {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-source-freesbe {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .metrics-grid-detailed {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            border-radius: var(--card-radius);
+            padding: 25px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .metric-card h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .metric-card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .metric-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-value.success {
+            color: var(--success-color);
+        }
+
+        .stat-value.error {
+            color: #ef4444;
+        }
+
+        .stuck-list {
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .stuck-item {
+            padding: 8px;
+            margin-bottom: 6px;
+            background: #fef2f2;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: #991b1b;
+        }
     </style>
 </head>
 <body>
@@ -370,9 +653,13 @@
         </header>
 
         <nav class="tabs-nav">
-            <button class="tab-btn active" onclick="switchTab('total')">מבט על</button>
-            <button class="tab-btn" onclick="switchTab('jobmaster')">JobMaster</button>
-            <button class="tab-btn" onclick="switchTab('alljobs')">AllJobs</button>
+            <button class="tab-btn active" onclick="switchTab('total', this)">מבט על</button>
+            <button class="tab-btn" onclick="switchTab('jobmaster', this)">JobMaster</button>
+            <button class="tab-btn" onclick="switchTab('alljobs', this)">AllJobs</button>
+            <button class="tab-btn" onclick="switchTab('madlan', this)">Madlan</button>
+            <button class="tab-btn" onclick="switchTab('carwiz', this)">CarWiz</button>
+            <button class="tab-btn" onclick="switchTab('freesbe', this)">Freesbe</button>
+            <button class="tab-btn" onclick="switchTab('monitoring', this)">ניטור מפורט</button>
         </nav>
 
         <!-- Total Tab -->
@@ -495,6 +782,11 @@
                         <span class="counter-label">משרות בריצה זו</span>
                     </div>
                 </div>
+                
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-subtle);">
+                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 5px;" id="aj-current-category">קטגוריה: -</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);" id="aj-last-activity">פעילות אחרונה: -</div>
+                </div>
             </div>
 
             <div class="actions-container">
@@ -524,17 +816,345 @@
                 </div>
             </div>
         </section>
+
+        <!-- Madlan Tab -->
+        <section id="madlan-tab" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-item is-running" id="md-jobs-container">
+                    <div class="metric-value">
+                        <span class="live-indicator"></span>
+                        <span id="md-total-listings">-</span>
+                    </div>
+                    <span class="metric-label">נכסים שנאספו</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="md-total-projects">-</div>
+                    <span class="metric-label">פרויקטים</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="md-total-cities">-</div>
+                    <span class="metric-label">ערים</span>
+                </div>
+            </div>
+
+            <div class="live-status-section">
+                <div class="status-badge">
+                    <span id="md-status-icon">●</span>
+                    <span id="md-status-text">Scraper בהמתנה</span>
+                </div>
+                
+                <div class="live-counters-container">
+                    <div class="live-counter-item">
+                        <div class="counter-value" id="md-pages-live">-</div>
+                        <span class="counter-label">עמודים נסרקו</span>
+                    </div>
+                    <div class="live-counter-item" style="border-right: 2px solid var(--border-subtle); padding-right: 30px;">
+                        <div class="counter-value" id="md-found-live" style="color: var(--accent-color);">-</div>
+                        <span class="counter-label">נכסים בריצה זו</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions-container">
+                <button class="btn btn-primary" id="md-start-btn" onclick="startScraper('madlan')">הפעל סקריפינג</button>
+                <button class="btn btn-secondary" id="md-stop-btn" onclick="stopScraper('madlan')" disabled>עצור פעולה</button>
+                <div class="last-run-info" id="md-last-run">-</div>
+            </div>
+
+            <div class="last-scraping-section">
+                <h2>סטטיסטיקות מפורטות - Madlan</h2>
+                <div id="md-last-scraping-content"></div>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-subtle);">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">סוגי נכסים</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="md-listing-types">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">סה"כ נכסים</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="md-total-properties">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">ערים</div>
+                            <div style="font-size: 1.3rem; font-weight: 700;" id="md-cities-count">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CarWiz Tab -->
+        <section id="carwiz-tab" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-item is-running" id="cw-jobs-container">
+                    <div class="metric-value">
+                        <span class="live-indicator"></span>
+                        <span id="cw-total-listings">-</span>
+                    </div>
+                    <span class="metric-label">רכבים שנאספו</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="cw-total-makes">-</div>
+                    <span class="metric-label">יצרנים ייחודיים</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="cw-total-cities">-</div>
+                    <span class="metric-label">ערים</span>
+                </div>
+            </div>
+
+            <div class="live-status-section">
+                <div class="status-badge">
+                    <span id="cw-status-icon">●</span>
+                    <span id="cw-status-text">Scraper בהמתנה</span>
+                </div>
+                
+                <div class="live-counters-container">
+                    <div class="live-counter-item">
+                        <div class="counter-value" id="cw-pages-live">-</div>
+                        <span class="counter-label">עמודים נסרקו</span>
+                    </div>
+                    <div class="live-counter-item" style="border-right: 2px solid var(--border-subtle); padding-right: 30px;">
+                        <div class="counter-value" id="cw-found-live" style="color: var(--accent-color);">-</div>
+                        <span class="counter-label">רכבים בריצה זו</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions-container">
+                <button class="btn btn-primary" id="cw-start-btn" onclick="startScraper('carwiz')">הפעל סקריפינג</button>
+                <button class="btn btn-secondary" id="cw-stop-btn" onclick="stopScraper('carwiz')" disabled>עצור פעולה</button>
+                <div class="last-run-info" id="cw-last-run">-</div>
+            </div>
+
+            <div class="last-scraping-section">
+                <h2>סטטיסטיקות מפורטות - CarWiz</h2>
+                <div id="cw-last-scraping-content"></div>
+            </div>
+        </section>
+
+        <!-- Freesbe Tab -->
+        <section id="freesbe-tab" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-item is-running" id="fb-jobs-container">
+                    <div class="metric-value">
+                        <span class="live-indicator"></span>
+                        <span id="fb-total-listings">-</span>
+                    </div>
+                    <span class="metric-label">רכבים שנאספו</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="fb-total-makes">-</div>
+                    <span class="metric-label">יצרנים ייחודיים</span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="fb-total-cities">-</div>
+                    <span class="metric-label">ערים</span>
+                </div>
+            </div>
+
+            <div class="live-status-section">
+                <div class="status-badge">
+                    <span id="fb-status-icon">●</span>
+                    <span id="fb-status-text">Scraper בהמתנה</span>
+                </div>
+                
+                <div class="live-counters-container">
+                    <div class="live-counter-item">
+                        <div class="counter-value" id="fb-pages-live">-</div>
+                        <span class="counter-label">עמודים נסרקו</span>
+                    </div>
+                    <div class="live-counter-item" style="border-right: 2px solid var(--border-subtle); padding-right: 30px;">
+                        <div class="counter-value" id="fb-found-live" style="color: var(--accent-color);">-</div>
+                        <span class="counter-label">רכבים בריצה זו</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions-container">
+                <button class="btn btn-primary" id="fb-start-btn" onclick="startScraper('freesbe')">הפעל סקריפינג</button>
+                <button class="btn btn-secondary" id="fb-stop-btn" onclick="stopScraper('freesbe')" disabled>עצור פעולה</button>
+                <div class="last-run-info" id="fb-last-run">-</div>
+            </div>
+
+            <div class="last-scraping-section">
+                <h2>סטטיסטיקות מפורטות - Freesbe</h2>
+                <div id="fb-last-scraping-content"></div>
+            </div>
+        </section>
+
+        <!-- Detailed Monitoring Tab -->
+        <section id="monitoring-tab" class="tab-content">
+            <!-- Proxy Status Card -->
+            <div class="monitoring-card">
+                <h2>סטטוס פרוקסי</h2>
+                <div class="proxy-status-grid">
+                    <div class="proxy-status-item">
+                        <div class="proxy-status-label">סטטוס</div>
+                        <div class="proxy-status-value" id="proxy-enabled">-</div>
+                    </div>
+                    <div class="proxy-status-item">
+                        <div class="proxy-status-label">בריאות</div>
+                        <div class="proxy-status-value" id="proxy-health">-</div>
+                    </div>
+                    <div class="proxy-status-item">
+                        <div class="proxy-status-label">פרוקסי נוכחי</div>
+                        <div class="proxy-status-value" id="proxy-host">-</div>
+                    </div>
+                    <div class="proxy-status-item">
+                        <div class="proxy-status-label">שיעור הצלחה</div>
+                        <div class="proxy-status-value" id="proxy-success-rate">-</div>
+                    </div>
+                    <div class="proxy-status-item">
+                        <div class="proxy-status-label">זמן תגובה ממוצע</div>
+                        <div class="proxy-status-value" id="proxy-avg-response">-</div>
+                    </div>
+                    <div class="proxy-status-item">
+                        <div class="proxy-status-label">מספר Rotations</div>
+                        <div class="proxy-status-value" id="proxy-rotations">-</div>
+                    </div>
+                </div>
+                <div class="proxy-errors-section" id="proxy-errors-section" style="display: none;">
+                    <h3>שגיאות אחרונות</h3>
+                    <div id="proxy-errors-list"></div>
+                </div>
+            </div>
+
+            <!-- Activity Log Table -->
+            <div class="monitoring-card">
+                <div class="activity-log-header">
+                    <h2>לוג פעילות בזמן אמת</h2>
+                    <div class="activity-filters">
+                        <button class="filter-btn active" onclick="filterActivities('all')" id="filter-all">הכל</button>
+                        <button class="filter-btn" onclick="filterActivities('alljobs')" id="filter-alljobs">AllJobs</button>
+                        <button class="filter-btn" onclick="filterActivities('jobmaster')" id="filter-jobmaster">JobMaster</button>
+                        <button class="filter-btn" onclick="filterActivities('madlan')" id="filter-madlan">Madlan</button>
+                        <button class="filter-btn" onclick="filterActivities('carwiz')" id="filter-carwiz">CarWiz</button>
+                        <button class="filter-btn" onclick="filterActivities('freesbe')" id="filter-freesbe">Freesbe</button>
+                    </div>
+                </div>
+                <div class="activity-table-container">
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>זמן</th>
+                                <th>מקור</th>
+                                <th>סוג</th>
+                                <th>סטטוס</th>
+                                <th>פרטים</th>
+                                <th>זמן תגובה</th>
+                                <th>פרוקסי</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-log-body">
+                            <tr><td colspan="7" style="text-align: center; padding: 20px;">טוען פעילויות...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Performance Metrics Grid -->
+            <div class="metrics-grid-detailed">
+                <div class="metric-card">
+                    <h3>פירוט בקשות</h3>
+                    <div class="metric-card-content">
+                        <div class="metric-stat">
+                            <span class="stat-label">סה"כ בקשות:</span>
+                            <span class="stat-value" id="metrics-total-requests">0</span>
+                        </div>
+                        <div class="metric-stat">
+                            <span class="stat-label">מוצלחות:</span>
+                            <span class="stat-value success" id="metrics-successful-requests">0</span>
+                        </div>
+                        <div class="metric-stat">
+                            <span class="stat-label">נכשלו:</span>
+                            <span class="stat-value error" id="metrics-failed-requests">0</span>
+                        </div>
+                        <div class="metric-stat">
+                            <span class="stat-label">שיעור הצלחה:</span>
+                            <span class="stat-value" id="metrics-success-rate">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>ניתוח שגיאות</h3>
+                    <div class="metric-card-content">
+                        <div class="metric-stat">
+                            <span class="stat-label">סה"כ שגיאות:</span>
+                            <span class="stat-value error" id="metrics-total-errors">0</span>
+                        </div>
+                        <div class="metric-stat">
+                            <span class="stat-label">שיעור שגיאות:</span>
+                            <span class="stat-value" id="metrics-error-rate">0%</span>
+                        </div>
+                        <div class="metric-stat">
+                            <span class="stat-label">שגיאה נפוצה:</span>
+                            <span class="stat-value" id="metrics-common-error">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>זמני תגובה</h3>
+                    <div class="metric-card-content">
+                        <div class="metric-stat">
+                            <span class="stat-label">ממוצע:</span>
+                            <span class="stat-value" id="metrics-avg-response">0ms</span>
+                        </div>
+                        <div class="metric-stat">
+                            <span class="stat-label">מינימום:</span>
+                            <span class="stat-value" id="metrics-min-response">0ms</span>
+                        </div>
+                        <div class="metric-stat">
+                            <span class="stat-label">מקסימום:</span>
+                            <span class="stat-value" id="metrics-max-response">0ms</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>פעולות תקועות</h3>
+                    <div class="metric-card-content">
+                        <div class="metric-stat">
+                            <span class="stat-label">מספר פעולות תקועות:</span>
+                            <span class="stat-value" id="metrics-stuck-operations">0</span>
+                        </div>
+                        <div id="metrics-stuck-list" class="stuck-list"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script>
         let statusCheckInterval = null;
 
-        function switchTab(tabName) {
+        // Make switchTab globally accessible
+        window.switchTab = function switchTab(tabName, buttonElement) {
+            // Remove active class from all tabs and buttons
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            event.currentTarget.classList.add('active');
-            document.getElementById(tabName + '-tab').classList.add('active');
+            // Add active class to clicked button
+            if (buttonElement) {
+                buttonElement.classList.add('active');
+            } else {
+                // Fallback: find button by onclick attribute
+                const buttons = document.querySelectorAll('.tab-btn');
+                buttons.forEach(btn => {
+                    const onclickAttr = btn.getAttribute('onclick');
+                    if (onclickAttr && onclickAttr.includes(`'${tabName}'`)) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+            
+            // Show the corresponding tab content
+            const tabContent = document.getElementById(tabName + '-tab');
+            if (tabContent) {
+                tabContent.classList.add('active');
+            }
         }
 
         async function loadDashboard() {
@@ -602,9 +1222,63 @@
                 if (ajTotalSessionsEl) ajTotalSessionsEl.textContent = (dashboardData.alljobs?.totalSessions || 0).toLocaleString('he-IL');
                 if (ajCompletedSessionsEl) ajCompletedSessionsEl.textContent = (dashboardData.alljobs?.completedSessions || 0).toLocaleString('he-IL');
 
+                // Madlan stats
+                const mdTotalListingsEl = document.getElementById('md-total-listings');
+                const mdTotalProjectsEl = document.getElementById('md-total-projects');
+                const mdTotalCitiesEl = document.getElementById('md-total-cities');
+                const mdListingTypesEl = document.getElementById('md-listing-types');
+                const mdTotalPropertiesEl = document.getElementById('md-total-properties');
+                const mdCitiesCountEl = document.getElementById('md-cities-count');
+                
+                if (mdTotalListingsEl) mdTotalListingsEl.textContent = (dashboardData.madlan?.totalListings || 0).toLocaleString('he-IL');
+                if (mdTotalProjectsEl) mdTotalProjectsEl.textContent = (dashboardData.madlan?.totalProjects || 0).toLocaleString('he-IL');
+                if (mdTotalCitiesEl) mdTotalCitiesEl.textContent = (dashboardData.madlan?.uniqueCities || 0).toLocaleString('he-IL');
+                if (mdListingTypesEl) mdListingTypesEl.textContent = (dashboardData.madlan?.listingTypes || 0).toLocaleString('he-IL');
+                if (mdTotalPropertiesEl) mdTotalPropertiesEl.textContent = (dashboardData.madlan?.totalProperties || 0).toLocaleString('he-IL');
+                if (mdCitiesCountEl) mdCitiesCountEl.textContent = (dashboardData.madlan?.uniqueCities || 0).toLocaleString('he-IL');
+
+                // Update Madlan stats using updateSourceStats
+                updateSourceStats('md', dashboardData.madlan || {});
+                
+                // Show active session if running, otherwise last session for Madlan
+                const mdSessionToShow = dashboardData.madlan?.activeScrapingSession || dashboardData.madlan?.lastScrapingSession;
+                renderScrapingInfo('md-last-scraping-content', mdSessionToShow);
+                updateLastRun('md-last-run', mdSessionToShow);
+
+                // CarWiz stats
+                const cwTotalListingsEl = document.getElementById('cw-total-listings');
+                const cwTotalMakesEl = document.getElementById('cw-total-makes');
+                const cwTotalCitiesEl = document.getElementById('cw-total-cities');
+                
+                if (cwTotalListingsEl) cwTotalListingsEl.textContent = (dashboardData.carwiz?.totalListings || 0).toLocaleString('he-IL');
+                if (cwTotalMakesEl) cwTotalMakesEl.textContent = (dashboardData.carwiz?.uniqueMakes || 0).toLocaleString('he-IL');
+                if (cwTotalCitiesEl) cwTotalCitiesEl.textContent = (dashboardData.carwiz?.uniqueCities || 0).toLocaleString('he-IL');
+
+                updateSourceStats('cw', dashboardData.carwiz || {});
+                const cwSessionToShow = dashboardData.carwiz?.activeScrapingSession || dashboardData.carwiz?.lastScrapingSession;
+                renderScrapingInfo('cw-last-scraping-content', cwSessionToShow);
+                updateLastRun('cw-last-run', cwSessionToShow);
+
+                // Freesbe stats
+                const fbTotalListingsEl = document.getElementById('fb-total-listings');
+                const fbTotalMakesEl = document.getElementById('fb-total-makes');
+                const fbTotalCitiesEl = document.getElementById('fb-total-cities');
+                
+                if (fbTotalListingsEl) fbTotalListingsEl.textContent = (dashboardData.freesbe?.totalListings || 0).toLocaleString('he-IL');
+                if (fbTotalMakesEl) fbTotalMakesEl.textContent = (dashboardData.freesbe?.uniqueMakes || 0).toLocaleString('he-IL');
+                if (fbTotalCitiesEl) fbTotalCitiesEl.textContent = (dashboardData.freesbe?.uniqueCities || 0).toLocaleString('he-IL');
+
+                updateSourceStats('fb', dashboardData.freesbe || {});
+                const fbSessionToShow = dashboardData.freesbe?.activeScrapingSession || dashboardData.freesbe?.lastScrapingSession;
+                renderScrapingInfo('fb-last-scraping-content', fbSessionToShow);
+                updateLastRun('fb-last-run', fbSessionToShow);
+
                 // Check scraper statuses
                 await checkScraperStatus('jobmaster');
                 await checkScraperStatus('alljobs');
+                await checkScraperStatus('madlan');
+                await checkScraperStatus('carwiz');
+                await checkScraperStatus('freesbe');
                 await updateGlobalStatus();
                 updateAllButtons();
             } catch (error) {
@@ -613,18 +1287,72 @@
         }
 
         function updateSourceStats(prefix, data) {
-            document.getElementById(`${prefix}-total-jobs`).textContent = (data.totalJobs || 0).toLocaleString('he-IL');
-            document.getElementById(`${prefix}-total-companies`).textContent = (data.uniqueCompanies || 0).toLocaleString('he-IL');
-            document.getElementById(`${prefix}-total-locations`).textContent = (data.uniqueLocations || 0).toLocaleString('he-IL');
-            
-            // Update live counters from active session if running, otherwise from last session
-            const activeSession = data.activeScrapingSession || data.lastScrapingSession;
-            if (activeSession) {
-                document.getElementById(`${prefix}-pages-live`).textContent = (activeSession.pagesScraped || 0).toLocaleString('he-IL');
-                document.getElementById(`${prefix}-found-live`).textContent = (activeSession.jobsFound || 0).toLocaleString('he-IL');
+            // For Madlan, use different field names
+            if (prefix === 'md') {
+                const listingsEl = document.getElementById(`${prefix}-total-listings`);
+                const projectsEl = document.getElementById(`${prefix}-total-projects`);
+                const citiesEl = document.getElementById(`${prefix}-total-cities`);
+                if (listingsEl) listingsEl.textContent = (data.totalListings || 0).toLocaleString('he-IL');
+                if (projectsEl) projectsEl.textContent = (data.totalProjects || 0).toLocaleString('he-IL');
+                if (citiesEl) citiesEl.textContent = (data.uniqueCities || 0).toLocaleString('he-IL');
+                
+                // Update live counters - Madlan uses listingsFound instead of jobsFound
+                const activeSession = data.activeScrapingSession || data.lastScrapingSession;
+                if (activeSession) {
+                    const pagesEl = document.getElementById(`${prefix}-pages-live`);
+                    const foundEl = document.getElementById(`${prefix}-found-live`);
+                    if (pagesEl) pagesEl.textContent = (activeSession.pagesScraped || 0).toLocaleString('he-IL');
+                    if (foundEl) foundEl.textContent = ((activeSession.listingsFound || 0) + (activeSession.projectsFound || 0)).toLocaleString('he-IL');
+                } else {
+                    const pagesEl = document.getElementById(`${prefix}-pages-live`);
+                    const foundEl = document.getElementById(`${prefix}-found-live`);
+                    if (pagesEl) pagesEl.textContent = '0';
+                    if (foundEl) foundEl.textContent = '0';
+                }
+            } else if (prefix === 'cw' || prefix === 'fb') {
+                // For car scrapers (CarWiz, Freesbe)
+                const listingsEl = document.getElementById(`${prefix}-total-listings`);
+                const makesEl = document.getElementById(`${prefix}-total-makes`);
+                const citiesEl = document.getElementById(`${prefix}-total-cities`);
+                if (listingsEl) listingsEl.textContent = (data.totalListings || 0).toLocaleString('he-IL');
+                if (makesEl) makesEl.textContent = (data.uniqueMakes || 0).toLocaleString('he-IL');
+                if (citiesEl) citiesEl.textContent = (data.uniqueCities || 0).toLocaleString('he-IL');
+                
+                // Update live counters - car scrapers use listingsFound
+                const activeSession = data.activeScrapingSession || data.lastScrapingSession;
+                if (activeSession) {
+                    const pagesEl = document.getElementById(`${prefix}-pages-live`);
+                    const foundEl = document.getElementById(`${prefix}-found-live`);
+                    if (pagesEl) pagesEl.textContent = (activeSession.pagesScraped || 0).toLocaleString('he-IL');
+                    if (foundEl) foundEl.textContent = (activeSession.listingsFound || 0).toLocaleString('he-IL');
+                } else {
+                    const pagesEl = document.getElementById(`${prefix}-pages-live`);
+                    const foundEl = document.getElementById(`${prefix}-found-live`);
+                    if (pagesEl) pagesEl.textContent = '0';
+                    if (foundEl) foundEl.textContent = '0';
+                }
             } else {
-                document.getElementById(`${prefix}-pages-live`).textContent = '0';
-                document.getElementById(`${prefix}-found-live`).textContent = '0';
+                // For job scrapers (AllJobs, JobMaster)
+                const jobsEl = document.getElementById(`${prefix}-total-jobs`);
+                const companiesEl = document.getElementById(`${prefix}-total-companies`);
+                const locationsEl = document.getElementById(`${prefix}-total-locations`);
+                if (jobsEl) jobsEl.textContent = (data.totalJobs || 0).toLocaleString('he-IL');
+                if (companiesEl) companiesEl.textContent = (data.uniqueCompanies || 0).toLocaleString('he-IL');
+                if (locationsEl) locationsEl.textContent = (data.uniqueLocations || 0).toLocaleString('he-IL');
+                
+                // Update live counters from active session if running, otherwise from last session
+                const activeSession = data.activeScrapingSession || data.lastScrapingSession;
+                if (activeSession) {
+                    const pagesEl = document.getElementById(`${prefix}-pages-live`);
+                    const foundEl = document.getElementById(`${prefix}-found-live`);
+                    if (pagesEl) pagesEl.textContent = (activeSession.pagesScraped || 0).toLocaleString('he-IL');
+                    if (foundEl) foundEl.textContent = (activeSession.jobsFound || 0).toLocaleString('he-IL');
+                } else {
+                    const pagesEl = document.getElementById(`${prefix}-pages-live`);
+                    const foundEl = document.getElementById(`${prefix}-found-live`);
+                    if (pagesEl) pagesEl.textContent = '0';
+                    if (foundEl) foundEl.textContent = '0';
+                }
             }
         }
 
@@ -648,12 +1376,23 @@
                 statusBadge = '<span class="status-badge-stopped">עצור</span>';
             }
 
+            // For Madlan, use listingsFound + projectsFound instead of jobsFound
+            // For car scrapers, use listingsFound
+            const itemsFound = session.listingsFound !== undefined || session.projectsFound !== undefined
+                ? ((session.listingsFound || 0) + (session.projectsFound || 0))
+                : (session.jobsFound || session.listingsFound || 0);
+            const itemsLabel = containerId.includes('md-') ? 'נכסים נמצאו' : 
+                              (containerId.includes('cw-') || containerId.includes('fb-')) ? 'רכבים נמצאו' : 
+                              'משרות נמצאו';
+
             container.innerHTML = `
                 <div class="last-scraping-info">
                     <div><span>תאריך התחלה:</span> <span>${startDate}</span></div>
                     <div><span>תאריך סיום:</span> <span>${endDate}</span></div>
                     <div><span>עמודים נסרקו:</span> <span>${session.pagesScraped || 0}</span></div>
-                    <div><span>משרות נמצאו:</span> <span>${session.jobsFound || 0}</span></div>
+                    <div><span>${itemsLabel}:</span> <span>${itemsFound}</span></div>
+                    ${containerId.includes('md-') && session.listingsFound !== undefined ? `<div><span>נכסים נמצאו:</span> <span>${session.listingsFound || 0}</span></div>` : ''}
+                    ${containerId.includes('md-') && session.projectsFound !== undefined ? `<div><span>פרויקטים נמצאו:</span> <span>${session.projectsFound || 0}</span></div>` : ''}
                     <div><span>סטטוס:</span> <span>${statusBadge}</span></div>
                 </div>
             `;
@@ -732,7 +1471,14 @@
         }
 
         function updateScraperUI(source, isRunning) {
-            const prefix = source === 'jobmaster' ? 'jm' : 'aj';
+            let prefix;
+            if (source === 'jobmaster') prefix = 'jm';
+            else if (source === 'alljobs') prefix = 'aj';
+            else if (source === 'madlan') prefix = 'md';
+            else if (source === 'carwiz') prefix = 'cw';
+            else if (source === 'freesbe') prefix = 'fb';
+            else return;
+            
             const container = document.getElementById(`${prefix}-jobs-container`);
             const statusIcon = document.getElementById(`${prefix}-status-icon`);
             const statusText = document.getElementById(`${prefix}-status-text`);
@@ -804,12 +1550,18 @@
             // Check immediately on start
             checkScraperStatus('alljobs');
             checkScraperStatus('jobmaster');
+            checkScraperStatus('madlan');
+            checkScraperStatus('carwiz');
+            checkScraperStatus('freesbe');
             loadDashboard();
             
             // Then check every 2 seconds
             statusCheckInterval = setInterval(async () => {
                 await checkScraperStatus('alljobs');
                 await checkScraperStatus('jobmaster');
+                await checkScraperStatus('madlan');
+                await checkScraperStatus('carwiz');
+                await checkScraperStatus('freesbe');
                 await loadDashboard();
             }, 2000);
         }
@@ -830,6 +1582,15 @@
                         }
                         if (result.results && result.results.jobmaster && result.results.jobmaster.success) {
                             updateScraperUI('jobmaster', true);
+                        }
+                        if (result.results && result.results.madlan && result.results.madlan.success) {
+                            updateScraperUI('madlan', true);
+                        }
+                        if (result.results && result.results.carwiz && result.results.carwiz.success) {
+                            updateScraperUI('carwiz', true);
+                        }
+                        if (result.results && result.results.freesbe && result.results.freesbe.success) {
+                            updateScraperUI('freesbe', true);
                         }
                         if (typeof updateGlobalStatus === 'function') updateGlobalStatus();
                         if (typeof updateAllButtons === 'function') updateAllButtons();
@@ -853,6 +1614,9 @@
                     if (result.success) {
                         updateScraperUI('alljobs', false);
                         updateScraperUI('jobmaster', false);
+                        updateScraperUI('madlan', false);
+                        updateScraperUI('carwiz', false);
+                        updateScraperUI('freesbe', false);
                         if (typeof updateGlobalStatus === 'function') updateGlobalStatus();
                         if (typeof updateAllButtons === 'function') updateAllButtons();
                         console.log('All scrapers stopped');
@@ -901,7 +1665,14 @@
                 
                 if (!startAllBtn || !stopAllBtn) return;
                 
-                const anyRunning = (alljobsBtn && alljobsBtn.disabled) || (jobmasterBtn && jobmasterBtn.disabled);
+                const madlanBtn = document.getElementById('md-start-btn');
+                const carwizBtn = document.getElementById('cw-start-btn');
+                const freesbeBtn = document.getElementById('fb-start-btn');
+                const anyRunning = (alljobsBtn && alljobsBtn.disabled) || 
+                                 (jobmasterBtn && jobmasterBtn.disabled) ||
+                                 (madlanBtn && madlanBtn.disabled) ||
+                                 (carwizBtn && carwizBtn.disabled) ||
+                                 (freesbeBtn && freesbeBtn.disabled);
                 
                 if (anyRunning) {
                     startAllBtn.style.display = 'none';
@@ -913,12 +1684,374 @@
             };
         }
 
+        // Fetch and display metrics from /api/metrics/summary
+        async function loadMetrics() {
+            try {
+                const response = await fetch('/api/metrics/summary');
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const data = result.data;
+                    
+                    // Update health status indicators
+                    if (data.scrapers) {
+                        data.scrapers.forEach(scraper => {
+                            let prefix;
+                            if (scraper.source === 'alljobs') prefix = 'aj';
+                            else if (scraper.source === 'jobmaster') prefix = 'jm';
+                            else if (scraper.source === 'madlan') prefix = 'md';
+                            else if (scraper.source === 'carwiz') prefix = 'cw';
+                            else if (scraper.source === 'freesbe') prefix = 'fb';
+                            else return;
+                            
+                            // Update health indicator if element exists
+                            const healthEl = document.getElementById(`${prefix}-health`);
+                            if (healthEl) {
+                                healthEl.textContent = scraper.health === 'healthy' ? 'תקין' : 
+                                                       scraper.health === 'degraded' ? 'מוגבל' :
+                                                       scraper.health === 'unhealthy' ? 'שגיאה' : 'לא ידוע';
+                                healthEl.className = `health-badge health-${scraper.health || 'unknown'}`;
+                            }
+                            
+                            // Update RPM if element exists
+                            const rpmEl = document.getElementById(`${prefix}-rpm`);
+                            if (rpmEl) {
+                                rpmEl.textContent = `${scraper.requestsPerMinute || 0} בקשות/דקה`;
+                            }
+                            
+                            // Update errors if element exists
+                            const errorsEl = document.getElementById(`${prefix}-errors`);
+                            if (errorsEl) {
+                                errorsEl.textContent = `${scraper.errors || 0} שגיאות`;
+                            }
+                            
+                            // Update current category if element exists
+                            const categoryEl = document.getElementById(`${prefix}-current-category`);
+                            if (categoryEl) {
+                                if (scraper.currentCategory && scraper.currentPage) {
+                                    categoryEl.textContent = `קטגוריה: ${scraper.currentCategory} (עמוד ${scraper.currentPage})`;
+                                    categoryEl.style.color = 'var(--text-primary)';
+                                    categoryEl.style.fontWeight = '600';
+                                } else {
+                                    categoryEl.textContent = 'אין פעילות';
+                                    categoryEl.style.color = 'var(--text-secondary)';
+                                }
+                            }
+                            
+                            // Check if scraper is stuck (no activity in last 2 minutes)
+                            const lastActivityEl = document.getElementById(`${prefix}-last-activity`);
+                            if (lastActivityEl && scraper.lastActivityTime) {
+                                const lastActivity = new Date(scraper.lastActivityTime);
+                                const now = new Date();
+                                const minutesAgo = Math.floor((now - lastActivity) / 60000);
+                                const secondsAgo = Math.floor((now - lastActivity) / 1000);
+                                
+                                if (minutesAgo < 1) {
+                                    lastActivityEl.textContent = `פעילות אחרונה: לפני ${secondsAgo} שניות`;
+                                    lastActivityEl.style.color = 'var(--success-color)';
+                                } else if (minutesAgo < 2) {
+                                    lastActivityEl.textContent = `פעילות אחרונה: לפני ${minutesAgo} דקות`;
+                                    lastActivityEl.style.color = 'var(--warning-color)';
+                                } else {
+                                    lastActivityEl.textContent = `⚠️ נתקע! אין פעילות ${minutesAgo} דקות`;
+                                    lastActivityEl.style.color = 'var(--error-color)';
+                                    lastActivityEl.style.fontWeight = '700';
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Update global metrics
+                    const globalRpmEl = document.getElementById('global-rpm');
+                    if (globalRpmEl && data.totals) {
+                        globalRpmEl.textContent = `${data.totals.totalRPM || 0}`;
+                    }
+                    
+                    const globalErrorsEl = document.getElementById('global-errors');
+                    if (globalErrorsEl && data.totals) {
+                        globalErrorsEl.textContent = `${data.totals.totalErrors || 0}`;
+                    }
+                }
+            } catch (error) {
+                console.log('Metrics not available:', error.message);
+            }
+        }
+
+        // Activity log and monitoring functions
+        let currentActivityFilter = 'all';
+        let activityUpdateInterval = null;
+
+        async function loadActivityLog() {
+            try {
+                const params = new URLSearchParams();
+                if (currentActivityFilter !== 'all') {
+                    params.append('source', currentActivityFilter);
+                }
+                params.append('limit', '100');
+                
+                const response = await fetch(`/api/activities?${params.toString()}`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    displayActivityLog(result.data.activities);
+                }
+            } catch (error) {
+                console.error('Error loading activity log:', error);
+            }
+        }
+
+        function displayActivityLog(activities) {
+            const tbody = document.getElementById('activity-log-body');
+            if (!tbody) return;
+
+            if (activities.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">אין פעילויות</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = activities.map(activity => {
+                const timestamp = new Date(activity.timestamp).toLocaleString('he-IL');
+                const statusBadge = getStatusBadge(activity.status);
+                const sourceBadge = getSourceBadge(activity.source);
+                const typeLabel = getTypeLabel(activity.type);
+                const details = getActivityDetails(activity);
+                const responseTime = activity.details.responseTimeMs ? `${activity.details.responseTimeMs}ms` : '-';
+                const proxyUsed = activity.details.proxyUsed ? 'כן' : 'לא';
+
+                return `
+                    <tr>
+                        <td>${timestamp}</td>
+                        <td>${sourceBadge}</td>
+                        <td>${typeLabel}</td>
+                        <td>${statusBadge}</td>
+                        <td>${details}</td>
+                        <td>${responseTime}</td>
+                        <td>${proxyUsed}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Auto-scroll to bottom
+            const container = document.querySelector('.activity-table-container');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                success: '<span class="badge badge-success">הצלחה</span>',
+                error: '<span class="badge badge-error">שגיאה</span>',
+                warning: '<span class="badge badge-warning">אזהרה</span>',
+                retry: '<span class="badge badge-retry">ניסיון חוזר</span>'
+            };
+            return badges[status] || status;
+        }
+
+        function getSourceBadge(source) {
+            const badges = {
+                alljobs: '<span class="badge badge-source-alljobs">AllJobs</span>',
+                jobmaster: '<span class="badge badge-source-jobmaster">JobMaster</span>',
+                madlan: '<span class="badge badge-source-madlan">Madlan</span>',
+                carwiz: '<span class="badge badge-source-carwiz">CarWiz</span>',
+                freesbe: '<span class="badge badge-source-freesbe">Freesbe</span>'
+            };
+            return badges[source] || source;
+        }
+
+        function getTypeLabel(type) {
+            const labels = {
+                http_request: 'בקשת HTTP',
+                parsing: 'פרסור',
+                database: 'מסד נתונים',
+                error: 'שגיאה',
+                proxy: 'פרוקסי'
+            };
+            return labels[type] || type;
+        }
+
+        function getActivityDetails(activity) {
+            if (activity.details.url) {
+                const url = activity.details.url.length > 50 
+                    ? activity.details.url.substring(0, 50) + '...' 
+                    : activity.details.url;
+                return url;
+            }
+            if (activity.details.category) {
+                return `${activity.details.category} - עמוד ${activity.details.page || '-'}`;
+            }
+            if (activity.details.operation) {
+                return activity.details.operation;
+            }
+            return activity.message || '-';
+        }
+
+        function filterActivities(source) {
+            currentActivityFilter = source;
+            
+            // Update filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`filter-${source}`).classList.add('active');
+            
+            loadActivityLog();
+        }
+
+        async function loadProxyStatus() {
+            try {
+                const response = await fetch('/api/proxy/status');
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    displayProxyStatus(result.data);
+                }
+            } catch (error) {
+                console.error('Error loading proxy status:', error);
+            }
+        }
+
+        function displayProxyStatus(status) {
+            document.getElementById('proxy-enabled').textContent = status.enabled ? 'מופעל' : 'מושבת';
+            document.getElementById('proxy-enabled').className = `proxy-status-value ${status.enabled ? 'healthy' : ''}`;
+            
+            const healthText = {
+                healthy: 'תקין',
+                degraded: 'מוגבל',
+                unhealthy: 'לא תקין',
+                unknown: 'לא ידוע'
+            };
+            document.getElementById('proxy-health').textContent = healthText[status.health] || status.health;
+            document.getElementById('proxy-health').className = `proxy-status-value ${status.health}`;
+            
+            document.getElementById('proxy-host').textContent = status.enabled 
+                ? `${status.currentHost}:${status.currentPort}` 
+                : '-';
+            document.getElementById('proxy-success-rate').textContent = status.enabled 
+                ? `${status.successRate}%` 
+                : '-';
+            document.getElementById('proxy-avg-response').textContent = status.enabled 
+                ? `${status.averageResponseTimeMs}ms` 
+                : '-';
+            document.getElementById('proxy-rotations').textContent = status.enabled 
+                ? status.rotationCount.toString() 
+                : '-';
+
+            // Display errors if any
+            if (status.recentErrors && status.recentErrors.length > 0) {
+                const errorsSection = document.getElementById('proxy-errors-section');
+                const errorsList = document.getElementById('proxy-errors-list');
+                errorsSection.style.display = 'block';
+                errorsList.innerHTML = status.recentErrors.slice(0, 10).map(error => {
+                    const timestamp = new Date(error.timestamp).toLocaleString('he-IL');
+                    return `<div class="error-item">${timestamp}: ${error.error}</div>`;
+                }).join('');
+            } else {
+                document.getElementById('proxy-errors-section').style.display = 'none';
+            }
+        }
+
+        async function loadPerformanceMetrics() {
+            try {
+                const response = await fetch('/api/activities/stats');
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    displayPerformanceMetrics(result.data);
+                }
+            } catch (error) {
+                console.error('Error loading performance metrics:', error);
+            }
+        }
+
+        function displayPerformanceMetrics(stats) {
+            // Calculate request metrics
+            const totalRequests = stats.byType.http_request || 0;
+            const successfulRequests = stats.byStatus.success || 0;
+            const failedRequests = stats.byStatus.error || 0;
+            const successRate = totalRequests > 0 
+                ? Math.round((successfulRequests / totalRequests) * 100) 
+                : 0;
+
+            document.getElementById('metrics-total-requests').textContent = totalRequests.toLocaleString('he-IL');
+            document.getElementById('metrics-successful-requests').textContent = successfulRequests.toLocaleString('he-IL');
+            document.getElementById('metrics-failed-requests').textContent = failedRequests.toLocaleString('he-IL');
+            document.getElementById('metrics-success-rate').textContent = `${successRate}%`;
+
+            // Error metrics
+            const totalErrors = stats.byStatus.error || 0;
+            const errorRate = totalRequests > 0 
+                ? Math.round((totalErrors / totalRequests) * 100) 
+                : 0;
+            const commonError = stats.recentErrors && stats.recentErrors.length > 0
+                ? stats.recentErrors[0].error.substring(0, 50)
+                : '-';
+
+            document.getElementById('metrics-total-errors').textContent = totalErrors.toLocaleString('he-IL');
+            document.getElementById('metrics-error-rate').textContent = `${errorRate}%`;
+            document.getElementById('metrics-common-error').textContent = commonError;
+
+            // Response time metrics (placeholder - would need actual data)
+            document.getElementById('metrics-avg-response').textContent = '-';
+            document.getElementById('metrics-min-response').textContent = '-';
+            document.getElementById('metrics-max-response').textContent = '-';
+
+            // Stuck operations (placeholder)
+            document.getElementById('metrics-stuck-operations').textContent = '0';
+            document.getElementById('metrics-stuck-list').innerHTML = '';
+        }
+
+        function startMonitoringUpdates() {
+            // Load initial data
+            loadActivityLog();
+            loadProxyStatus();
+            loadPerformanceMetrics();
+
+            // Set up intervals for real-time updates
+            if (activityUpdateInterval) {
+                clearInterval(activityUpdateInterval);
+            }
+
+            // Update every 2 seconds when monitoring tab is active
+            activityUpdateInterval = setInterval(() => {
+                const monitoringTab = document.getElementById('monitoring-tab');
+                if (monitoringTab && monitoringTab.classList.contains('active')) {
+                    loadActivityLog();
+                    loadProxyStatus();
+                    loadPerformanceMetrics();
+                }
+            }, 2000);
+        }
+
+        function stopMonitoringUpdates() {
+            if (activityUpdateInterval) {
+                clearInterval(activityUpdateInterval);
+                activityUpdateInterval = null;
+            }
+        }
+
+        // Override switchTab to handle monitoring tab
+        const originalSwitchTab = window.switchTab;
+        window.switchTab = function(tabName, buttonElement) {
+            originalSwitchTab(tabName, buttonElement);
+            
+            if (tabName === 'monitoring') {
+                startMonitoringUpdates();
+            } else {
+                stopMonitoringUpdates();
+            }
+        };
+
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadDashboard();
             startStatusChecking();
+            loadMetrics(); // Load metrics initially
             if (typeof updateGlobalStatus === 'function') updateGlobalStatus();
             if (typeof updateAllButtons === 'function') updateAllButtons();
+            
+            // Also load metrics every 5 seconds
+            setInterval(loadMetrics, 5000);
         });
     </script>
 </body>

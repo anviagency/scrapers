@@ -7,10 +7,22 @@ import { createLogger } from '../utils/logger';
 // DatabaseManager removed - using source-specific databases instead
 import { AllJobsDatabaseManager } from '../database/alljobs/AllJobsDatabaseManager';
 import { JobMasterDatabaseManager } from '../database/jobmaster/JobMasterDatabaseManager';
+import { MadlanDatabaseManager } from '../database/madlan/MadlanDatabaseManager';
+import { CarWizDatabaseManager } from '../database/carwiz/CarWizDatabaseManager';
+import { FreesbeDatabaseManager } from '../database/freesbe/FreesbeDatabaseManager';
 import { swaggerSpec } from './swagger';
 import { createAllJobsRouter } from './routes/jobs/alljobs';
 import { createJobMasterRouter } from './routes/jobs/jobmaster';
+import { createMadlanRoutes } from './routes/madlan';
+import { createCarWizRouter } from './routes/cars/carwiz';
+import { createFreesbeRouter } from './routes/cars/freesbe';
+import { createMetricsRouter } from './routes/metrics';
+import { createActivitiesRouter } from './routes/activities';
+import { createProxyRouter, setProxyStatusTracker } from './routes/proxy';
 import { ScraperService } from './services/ScraperService';
+import { DataExporter } from '../export/DataExporter';
+import { ActivityLogger } from '../monitoring/ActivityLogger';
+import { ProxyStatusTracker } from '../monitoring/ProxyStatusTracker';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,16 +31,32 @@ const logger = createLogger('api-server');
 // Initialize databases
 const allJobsDbPath = path.join(process.cwd(), 'data', 'alljobs.db');
 const jobMasterDbPath = path.join(process.cwd(), 'data', 'jobmaster.db');
+const madlanDbPath = path.join(process.cwd(), 'data', 'madlan.db');
+const carwizDbPath = path.join(process.cwd(), 'data', 'carwiz.db');
+const freesbeDbPath = path.join(process.cwd(), 'data', 'freesbe.db');
 const allJobsDb = new AllJobsDatabaseManager(allJobsDbPath, logger);
 const jobMasterDb = new JobMasterDatabaseManager(jobMasterDbPath, logger);
+const madlanDb = new MadlanDatabaseManager(madlanDbPath, logger);
+const carwizDb = new CarWizDatabaseManager(carwizDbPath, logger);
+const freesbeDb = new FreesbeDatabaseManager(freesbeDbPath, logger);
+
+// Output directory for exports (used by route handlers)
+const outputDir = path.join(process.cwd(), 'output');
 
 // Initialize scraper service
 const scraperService = new ScraperService(logger);
 
-// Legacy database removed - using source-specific databases instead
+// Initialize data exporter
+const exporter = new DataExporter(outputDir, logger);
 
-// Output directory for exports (used by route handlers)
-const outputDir = path.join(process.cwd(), 'output');
+// Initialize monitoring components
+ActivityLogger.getInstance(logger); // Initialize singleton
+const proxyStatusTracker = new ProxyStatusTracker(logger);
+setProxyStatusTracker(proxyStatusTracker);
+
+logger.info('Monitoring components initialized');
+
+// Legacy database removed - using source-specific databases instead
 
 // Middleware
 app.use(cors());
@@ -75,6 +103,16 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 // Mount source-specific routes
 app.use('/api/jobs/alljobs', createAllJobsRouter(logger, outputDir));
 app.use('/api/jobs/jobmaster', createJobMasterRouter(logger, outputDir));
+app.use('/api/realestate/madlan', createMadlanRoutes(madlanDb, exporter));
+app.use('/api/cars/carwiz', createCarWizRouter(logger, outputDir));
+app.use('/api/cars/freesbe', createFreesbeRouter(logger, outputDir));
+
+// Mount metrics routes
+app.use('/api/metrics', createMetricsRouter(logger, allJobsDb, jobMasterDb, madlanDb, carwizDb, freesbeDb));
+
+// Mount activities and proxy routes
+app.use('/api/activities', createActivitiesRouter(logger));
+app.use('/api/proxy', createProxyRouter(logger));
 
 // Legacy routes (backward compatibility - redirect to alljobs)
 app.get('/api/jobs', (req, res) => {
@@ -175,10 +213,35 @@ app.get('/api/dashboard', (_req, res) => {
     const jobMasterLastScraping = jobMasterDb.getLastScrapingSession();
     const jobMasterSessions = jobMasterDb.getScrapingSessions(5);
 
+    // Get Madlan stats
+    const madlanListings = madlanDb.getListings({ limit: 1000 });
+    const madlanProjects = madlanDb.getProjects({ limit: 1000 });
+    const madlanTotal = madlanListings.length + madlanProjects.length;
+    const madlanCities = [...new Set(madlanListings.map(l => l.city).filter(Boolean))];
+    const madlanListingTypes = [...new Set(madlanListings.map(l => l.listingType))];
+    const madlanLastScraping = madlanDb.getLastScrapingSession();
+    const madlanSessions = madlanDb.getScrapingSessions(5);
+
+    // Get CarWiz stats
+    const carwizTotal = carwizDb.getListingsCount();
+    const carwizList = carwizDb.getListings({ limit: 1000 });
+    const carwizMakes = [...new Set(carwizList.map(l => l.specification?.makeName).filter(Boolean))];
+    const carwizCities = [...new Set(carwizList.map(l => l.agencyBranch?.city).filter(Boolean))];
+    const carwizLastScraping = carwizDb.getLastScrapingSession();
+    const carwizSessions = carwizDb.getScrapingSessions(5);
+
+    // Get Freesbe stats
+    const freesbeTotal = freesbeDb.getListingsCount();
+    const freesbeList = freesbeDb.getListings({ limit: 1000 });
+    const freesbeMakes = [...new Set(freesbeList.map(l => l.make).filter(Boolean))];
+    const freesbeCities = [...new Set(freesbeList.map(l => l.city).filter(Boolean))];
+    const freesbeLastScraping = freesbeDb.getLastScrapingSession();
+    const freesbeSessions = freesbeDb.getScrapingSessions(5);
+
     // Combined stats
-    const totalJobs = allJobsTotal + jobMasterTotal;
+    const totalJobs = allJobsTotal + jobMasterTotal + madlanTotal + carwizTotal + freesbeTotal;
     const totalCompanies = new Set([...allJobsCompanies, ...jobMasterCompanies]).size;
-    const totalLocations = new Set([...allJobsLocations, ...jobMasterLocations]).size;
+    const totalLocations = new Set([...allJobsLocations, ...jobMasterLocations, ...madlanCities, ...carwizCities, ...freesbeCities]).size;
     const totalJobTypes = new Set([...allJobsJobTypes, ...jobMasterJobTypes]).size;
 
     // Calculate additional statistics
@@ -194,9 +257,15 @@ app.get('/api/dashboard', (_req, res) => {
     // Sessions are sorted by started_at DESC, so the first one is the most recent
     const allJobsRunningSessions = allJobsSessions.filter(s => s.status === 'running');
     const jobMasterRunningSessions = jobMasterSessions.filter(s => s.status === 'running');
+    const madlanRunningSessions = madlanSessions.filter(s => s.status === 'running');
+    const carwizRunningSessions = carwizSessions.filter(s => s.status === 'running');
+    const freesbeRunningSessions = freesbeSessions.filter(s => s.status === 'running');
     // Get the most recent running session (first in array, which is sorted by started_at DESC)
     const allJobsActiveSession = allJobsRunningSessions.length > 0 ? allJobsRunningSessions[0] : null;
     const jobMasterActiveSession = jobMasterRunningSessions.length > 0 ? jobMasterRunningSessions[0] : null;
+    const madlanActiveSession = madlanRunningSessions.length > 0 ? madlanRunningSessions[0] : null;
+    const carwizActiveSession = carwizRunningSessions.length > 0 ? carwizRunningSessions[0] : null;
+    const freesbeActiveSession = freesbeRunningSessions.length > 0 ? freesbeRunningSessions[0] : null;
 
     res.json({
       success: true,
@@ -235,6 +304,44 @@ app.get('/api/dashboard', (_req, res) => {
         totalSessions: jobMasterSessions.length,
         completedSessions: jobMasterSessions.filter(s => s.status === 'completed').length,
         failedSessions: jobMasterSessions.filter(s => s.status === 'failed').length,
+      },
+      // Madlan source
+      madlan: {
+        totalListings: madlanListings.length,
+        totalProjects: madlanProjects.length,
+        totalProperties: madlanTotal,
+        uniqueCities: madlanCities.length,
+        listingTypes: madlanListingTypes.length,
+        lastScrapingSession: madlanLastScraping,
+        activeScrapingSession: madlanActiveSession,
+        scrapingSessions: madlanSessions,
+        totalSessions: madlanSessions.length,
+        completedSessions: madlanSessions.filter(s => s.status === 'completed').length,
+        failedSessions: madlanSessions.filter(s => s.status === 'failed').length,
+      },
+      // CarWiz source
+      carwiz: {
+        totalListings: carwizTotal,
+        uniqueMakes: carwizMakes.length,
+        uniqueCities: carwizCities.length,
+        lastScrapingSession: carwizLastScraping,
+        activeScrapingSession: carwizActiveSession,
+        scrapingSessions: carwizSessions,
+        totalSessions: carwizSessions.length,
+        completedSessions: carwizSessions.filter(s => s.status === 'completed').length,
+        failedSessions: carwizSessions.filter(s => s.status === 'failed').length,
+      },
+      // Freesbe source
+      freesbe: {
+        totalListings: freesbeTotal,
+        uniqueMakes: freesbeMakes.length,
+        uniqueCities: freesbeCities.length,
+        lastScrapingSession: freesbeLastScraping,
+        activeScrapingSession: freesbeActiveSession,
+        scrapingSessions: freesbeSessions,
+        totalSessions: freesbeSessions.length,
+        completedSessions: freesbeSessions.filter(s => s.status === 'completed').length,
+        failedSessions: freesbeSessions.filter(s => s.status === 'failed').length,
       },
     });
   } catch (error) {
@@ -354,9 +461,12 @@ app.post('/api/scrapers/all/start', async (_req, res) => {
     const results = {
       alljobs: await scraperService.startScraper('alljobs'),
       jobmaster: await scraperService.startScraper('jobmaster'),
+      madlan: await scraperService.startScraper('madlan'),
+      carwiz: await scraperService.startScraper('carwiz'),
+      freesbe: await scraperService.startScraper('freesbe'),
     };
 
-    const allSuccess = results.alljobs.success && results.jobmaster.success;
+    const allSuccess = results.alljobs.success && results.jobmaster.success && results.madlan.success && results.carwiz.success && results.freesbe.success;
     const statusCode = allSuccess ? 200 : 207; // 207 Multi-Status
 
     res.status(statusCode).json({
@@ -390,6 +500,9 @@ app.post('/api/scrapers/all/stop', (_req, res) => {
     const results = {
       alljobs: scraperService.stopScraper('alljobs'),
       jobmaster: scraperService.stopScraper('jobmaster'),
+      madlan: scraperService.stopScraper('madlan'),
+      carwiz: scraperService.stopScraper('carwiz'),
+      freesbe: scraperService.stopScraper('freesbe'),
     };
 
     res.json({
@@ -423,6 +536,8 @@ app.get('/api/scrapers/all/status', (_req, res) => {
     const allStatuses = scraperService.getAllScraperStatuses();
     const allJobsLastSession = allJobsDb.getLastScrapingSession();
     const jobMasterLastSession = jobMasterDb.getLastScrapingSession();
+    const carwizLastSession = carwizDb.getLatestSession();
+    const freesbeLastSession = freesbeDb.getLatestSession();
 
     res.json({
       success: true,
@@ -434,6 +549,17 @@ app.get('/api/scrapers/all/status', (_req, res) => {
         jobmaster: {
           ...allStatuses.get('jobmaster'),
           lastSession: jobMasterLastSession,
+        },
+        madlan: {
+          ...allStatuses.get('madlan'),
+        },
+        carwiz: {
+          ...allStatuses.get('carwiz'),
+          lastSession: carwizLastSession,
+        },
+        freesbe: {
+          ...allStatuses.get('freesbe'),
+          lastSession: freesbeLastSession,
         },
       },
     });
@@ -454,7 +580,7 @@ app.get('/api/scrapers/all/status', (_req, res) => {
  *   post:
  *     summary: Start a scraper manually
  *     description: |
- *       Start a scraper process for the specified source (alljobs or jobmaster).
+ *       Start a scraper process for the specified source (alljobs, jobmaster, madlan, carwiz, or freesbe).
  *       The scraper will run in the background and update the database incrementally.
  *     tags: [Scrapers]
  *     parameters:
@@ -463,7 +589,7 @@ app.get('/api/scrapers/all/status', (_req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [alljobs, jobmaster]
+ *           enum: [alljobs, jobmaster, madlan, carwiz, freesbe]
  *     requestBody:
  *       content:
  *         application/json:
@@ -485,16 +611,16 @@ app.get('/api/scrapers/all/status', (_req, res) => {
 app.post('/api/scrapers/:source/start', async (req, res) => {
   try {
     const { source } = req.params;
-    if (source !== 'alljobs' && source !== 'jobmaster') {
+    if (source !== 'alljobs' && source !== 'jobmaster' && source !== 'madlan' && source !== 'carwiz' && source !== 'freesbe') {
       res.status(400).json({
         success: false,
-        error: 'Invalid source. Must be "alljobs" or "jobmaster"',
+        error: 'Invalid source. Must be "alljobs", "jobmaster", "madlan", "carwiz", or "freesbe"',
       });
       return;
     }
 
     const { maxPages, resumeFromPage } = req.body;
-    const result = await scraperService.startScraper(source as 'alljobs' | 'jobmaster', {
+    const result = await scraperService.startScraper(source as 'alljobs' | 'jobmaster' | 'madlan' | 'carwiz' | 'freesbe', {
       maxPages: maxPages ? parseInt(String(maxPages), 10) : undefined,
       resumeFromPage: resumeFromPage ? parseInt(String(resumeFromPage), 10) : undefined,
     });
@@ -528,7 +654,7 @@ app.post('/api/scrapers/:source/start', async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [alljobs, jobmaster]
+ *           enum: [alljobs, jobmaster, madlan, carwiz, freesbe]
  *     responses:
  *       200:
  *         description: Scraper stopped successfully
@@ -538,15 +664,15 @@ app.post('/api/scrapers/:source/start', async (req, res) => {
 app.post('/api/scrapers/:source/stop', (req, res) => {
   try {
     const { source } = req.params;
-    if (source !== 'alljobs' && source !== 'jobmaster') {
+    if (source !== 'alljobs' && source !== 'jobmaster' && source !== 'madlan' && source !== 'carwiz' && source !== 'freesbe') {
       res.status(400).json({
         success: false,
-        error: 'Invalid source. Must be "alljobs" or "jobmaster"',
+        error: 'Invalid source. Must be "alljobs", "jobmaster", "madlan", "carwiz", or "freesbe"',
       });
       return;
     }
 
-    const result = scraperService.stopScraper(source as 'alljobs' | 'jobmaster');
+    const result = scraperService.stopScraper(source as 'alljobs' | 'jobmaster' | 'madlan' | 'carwiz' | 'freesbe');
     if (result.success) {
       res.json(result);
     } else {
@@ -576,7 +702,7 @@ app.post('/api/scrapers/:source/stop', (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [alljobs, jobmaster]
+ *           enum: [alljobs, jobmaster, madlan, carwiz, freesbe]
  *     responses:
  *       200:
  *         description: Scraper status
@@ -584,17 +710,27 @@ app.post('/api/scrapers/:source/stop', (req, res) => {
 app.get('/api/scrapers/:source/status', (req, res) => {
   try {
     const { source } = req.params;
-    if (source !== 'alljobs' && source !== 'jobmaster') {
+    if (source !== 'alljobs' && source !== 'jobmaster' && source !== 'madlan' && source !== 'carwiz' && source !== 'freesbe') {
       res.status(400).json({
         success: false,
-        error: 'Invalid source. Must be "alljobs" or "jobmaster"',
+        error: 'Invalid source. Must be "alljobs", "jobmaster", "madlan", "carwiz", or "freesbe"',
       });
       return;
     }
 
-    const status = scraperService.getScraperStatus(source as 'alljobs' | 'jobmaster');
-    const db = source === 'alljobs' ? allJobsDb : jobMasterDb;
-    const lastSession = db.getLastScrapingSession();
+    const status = scraperService.getScraperStatus(source as 'alljobs' | 'jobmaster' | 'madlan' | 'carwiz' | 'freesbe');
+    let lastSession = null;
+    if (source === 'alljobs') {
+      lastSession = allJobsDb.getLastScrapingSession();
+    } else if (source === 'jobmaster') {
+      lastSession = jobMasterDb.getLastScrapingSession();
+    } else if (source === 'madlan') {
+      lastSession = madlanDb.getLastScrapingSession();
+    } else if (source === 'carwiz') {
+      lastSession = carwizDb.getLastScrapingSession();
+    } else if (source === 'freesbe') {
+      lastSession = freesbeDb.getLastScrapingSession();
+    }
 
     res.json({
       success: true,
@@ -679,6 +815,7 @@ process.on('SIGINT', () => {
   logger.info('Shutting down API server');
   allJobsDb.close();
   jobMasterDb.close();
+  madlanDb.close();
   process.exit(0);
 });
 
@@ -686,6 +823,7 @@ process.on('SIGTERM', () => {
   logger.info('Shutting down API server');
   allJobsDb.close();
   jobMasterDb.close();
+  madlanDb.close();
   process.exit(0);
 });
 

@@ -1,6 +1,8 @@
 import { loadConfig } from './utils/validators';
 import { createLogger } from './utils/logger';
 import { EvomiProxyManager } from './proxy/EvomiProxyManager';
+import { ProxyStatusTracker } from './monitoring/ProxyStatusTracker';
+import { ActivityLogger } from './monitoring/ActivityLogger';
 import { HttpClient } from './http/HttpClient';
 import { JobListingParser } from './scraper/JobListingParser';
 import { AllJobsMultiCategoryScraper } from './scraper/AllJobsMultiCategoryScraper';
@@ -17,29 +19,40 @@ async function main(): Promise<void> {
     const config = loadConfig();
     const logger = createLogger('alljobs-scraper');
 
-    logger.info('Starting AllJobs Multi-Category Scraper', {
+    logger.info('═══════════════════════════════════════════════════════');
+    logger.info('ALLJOBS SCRAPER STARTING');
+    logger.info('═══════════════════════════════════════════════════════');
+    logger.info('Configuration', {
       baseUrl: config.baseUrl,
       maxRetries: config.maxRetries,
-      rateLimitDelayMs: config.rateLimitDelayMs,
     });
 
-    // Initialize components
-    const proxyManager = new EvomiProxyManager(
-      config.evomiProxyKey,
-      logger,
-      config.evomiProxyEndpoint
-    );
+    // Initialize monitoring components
+    const activityLogger = ActivityLogger.getInstance(logger);
+    const proxyStatusTracker = new ProxyStatusTracker(logger);
 
-    // Validate proxy
-    const proxyValid = await proxyManager.validateProxy();
-    if (!proxyValid) {
-      logger.warn('Proxy validation failed, continuing anyway');
+    // ENABLE PROXY - Required to avoid blocking and ensure complete scraping
+    const proxyKey = process.env.EVOMI_PROXY_KEY || config.evomiProxyKey || '';
+    const proxyEndpoint = process.env.EVOMI_PROXY_ENDPOINT || config.evomiProxyEndpoint;
+    const proxyManager = new EvomiProxyManager(proxyKey, logger, proxyEndpoint, proxyStatusTracker);
+    
+    if (proxyKey) {
+      logger.info('Using PROXY - required to avoid blocking and ensure complete scraping', {
+        proxyEndpoint: proxyEndpoint || 'default',
+      });
+      proxyStatusTracker.setEnabled(true);
+    } else {
+      logger.warn('No proxy key found - scraping may be blocked or incomplete');
+      proxyStatusTracker.setEnabled(false);
     }
 
     const httpClient = new HttpClient(proxyManager, logger, {
-      rateLimitDelayMs: 100, // FAST: Reduced to 100ms for maximum speed (same as JobMaster)
+      rateLimitDelayMs: 500, // Slower with proxy to avoid detection
       maxRetries: config.maxRetries,
       retryDelayMs: config.retryDelayMs,
+      useProxy: !!proxyKey, // Enable proxy if key is provided
+      source: 'alljobs',
+      activityLogger,
     });
 
     const parser = new JobListingParser(logger, config.baseUrl);
@@ -56,7 +69,8 @@ async function main(): Promise<void> {
       httpClient,
       parser,
       logger,
-      db
+      db,
+      activityLogger
     );
 
     // Start scraping all categories

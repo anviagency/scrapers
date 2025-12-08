@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { Logger } from '../../utils/logger';
 
 export interface ScraperStatus {
-  source: 'alljobs' | 'jobmaster';
+  source: 'alljobs' | 'jobmaster' | 'madlan' | 'carwiz' | 'freesbe';
   isRunning: boolean;
   processId?: number;
   startedAt?: Date;
@@ -23,12 +23,12 @@ export class ScraperService {
 
   /**
    * Start a scraper process
-   * @param source - Scraper source ('alljobs' or 'jobmaster')
+   * @param source - Scraper source ('alljobs', 'jobmaster', 'madlan', 'carwiz', or 'freesbe')
    * @param options - Scraping options
    * @returns Promise that resolves when scraper starts
    */
   async startScraper(
-    source: 'alljobs' | 'jobmaster',
+    source: 'alljobs' | 'jobmaster' | 'madlan' | 'carwiz' | 'freesbe',
     options?: {
       maxPages?: number;
       resumeFromPage?: number;
@@ -43,10 +43,20 @@ export class ScraperService {
 
     try {
       // Use compiled JavaScript from dist folder
-      const scriptPath =
-        source === 'alljobs'
-          ? path.join(process.cwd(), 'dist', 'index.js')
-          : path.join(process.cwd(), 'dist', 'scrapers', 'jobmaster', 'index.js');
+      let scriptPath: string;
+      if (source === 'alljobs') {
+        scriptPath = path.join(process.cwd(), 'dist', 'index.js');
+      } else if (source === 'jobmaster') {
+        scriptPath = path.join(process.cwd(), 'dist', 'scrapers', 'jobmaster', 'index.js');
+      } else if (source === 'madlan') {
+        scriptPath = path.join(process.cwd(), 'dist', 'realestate', 'madlan', 'index.js');
+      } else if (source === 'carwiz') {
+        scriptPath = path.join(process.cwd(), 'dist', 'cars', 'carwiz', 'index.js');
+      } else if (source === 'freesbe') {
+        scriptPath = path.join(process.cwd(), 'dist', 'cars', 'freesbe', 'index.js');
+      } else {
+        throw new Error(`Unknown scraper source: ${source}`);
+      }
 
       // Set environment variables for options instead of command line args
       // (since the scrapers read from env vars)
@@ -139,7 +149,7 @@ export class ScraperService {
    * @param source - Scraper source
    * @returns Success status
    */
-  stopScraper(source: 'alljobs' | 'jobmaster'): { success: boolean; message: string } {
+  stopScraper(source: 'alljobs' | 'jobmaster' | 'madlan' | 'carwiz' | 'freesbe'): { success: boolean; message: string } {
     const process = this.runningScrapers.get(source);
     if (!process) {
       return {
@@ -172,7 +182,7 @@ export class ScraperService {
    * @param source - Scraper source
    * @returns Scraper status
    */
-  getScraperStatus(source: 'alljobs' | 'jobmaster'): ScraperStatus {
+  getScraperStatus(source: 'alljobs' | 'jobmaster' | 'madlan' | 'carwiz' | 'freesbe'): ScraperStatus {
     const process = this.runningScrapers.get(source);
     return {
       source,
@@ -190,6 +200,9 @@ export class ScraperService {
     const statuses = new Map<string, ScraperStatus>();
     statuses.set('alljobs', this.getScraperStatus('alljobs'));
     statuses.set('jobmaster', this.getScraperStatus('jobmaster'));
+    statuses.set('madlan', this.getScraperStatus('madlan'));
+    statuses.set('carwiz', this.getScraperStatus('carwiz'));
+    statuses.set('freesbe', this.getScraperStatus('freesbe'));
     return statuses;
   }
 }

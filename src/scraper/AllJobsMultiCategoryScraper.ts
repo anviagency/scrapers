@@ -3,6 +3,8 @@ import type { JobListingParser } from './JobListingParser';
 import type { Logger } from '../utils/logger';
 import type { JobListing } from '../types/JobListing';
 import type { AllJobsDatabaseManager } from '../database/alljobs/AllJobsDatabaseManager';
+import type { ActivityLogger } from '../monitoring/ActivityLogger';
+import { AllJobsJobDetailFetcher } from './AllJobsJobDetailFetcher';
 import * as cheerio from 'cheerio';
 
 /**
@@ -19,6 +21,8 @@ interface CategoryDefinition {
 export interface MultiCategoryScrapingOptions {
   maxPagesPerCategory?: number;
   sessionId?: number;
+  fetchJobDetails?: boolean; // Whether to fetch individual job detail pages for full category extraction (default: true)
+  detailFetchConcurrency?: number; // Max concurrent detail page fetches (default: 10)
 }
 
 /**
@@ -30,8 +34,10 @@ export class AllJobsMultiCategoryScraper {
   private readonly parser: JobListingParser;
   private readonly logger: Logger;
   private readonly database: AllJobsDatabaseManager;
+  private readonly activityLogger?: ActivityLogger;
   private readonly baseUrl: string = 'https://www.alljobs.co.il';
   private readonly scrapedJobIds: Set<string> = new Set();
+  private detailFetcher: AllJobsJobDetailFetcher | null = null;
 
   /**
    * Comprehensive list of AllJobs categories with their position IDs
@@ -99,12 +105,14 @@ export class AllJobsMultiCategoryScraper {
     httpClient: HttpClient,
     parser: JobListingParser,
     logger: Logger,
-    database: AllJobsDatabaseManager
+    database: AllJobsDatabaseManager,
+    activityLogger?: ActivityLogger
   ) {
     this.httpClient = httpClient;
     this.parser = parser;
     this.logger = logger;
     this.database = database;
+    this.activityLogger = activityLogger;
   }
 
   /**
@@ -115,64 +123,102 @@ export class AllJobsMultiCategoryScraper {
     totalPages: number;
     categoriesScraped: number;
   }> {
+    // OPTIMIZATION: Disable detail fetching by default for speed
+    // Can be enabled if full category extraction is needed
+    const fetchJobDetails = options.fetchJobDetails === true; // Default: false for speed
+    const detailFetchConcurrency = options.detailFetchConcurrency || 20; // Increased from 10 to 20
+
+    // Initialize detail fetcher if needed
+    if (fetchJobDetails) {
+      this.detailFetcher = new AllJobsJobDetailFetcher(
+        this.httpClient,
+        this.logger,
+        this.baseUrl,
+        {
+          maxConcurrency: detailFetchConcurrency,
+          timeoutMs: 5000,
+          retryAttempts: 2,
+          retryDelayMs: 1000,
+        }
+      );
+      this.logger.info('Job detail fetching enabled', {
+        maxConcurrency: detailFetchConcurrency,
+      });
+    }
     const { maxPagesPerCategory = 10000, sessionId } = options; // NO LIMIT: Set to 10000 to ensure we get ALL jobs
 
-    let totalJobs = 0;
     let totalPages = 0;
     let categoriesScraped = 0;
 
-    // Don't load all job IDs - let database handle duplicates via upsert
-    // This is MUCH faster for large databases
+    // Track initial database count for accurate progress
+    const initialDbCount = this.database.getJobsCount();
     this.logger.info('Starting multi-category scraping', {
       totalCategories: this.categories.length,
       maxPagesPerCategory,
+      initialDatabaseCount: initialDbCount,
     });
 
     for (const category of this.categories) {
       try {
-        this.logger.info(`Scraping category: ${category.name}`, {
+        this.logger.info(`>>> Starting category ${categoriesScraped + 1}/${this.categories.length}: ${category.name}`, {
           positionId: category.positionId,
-          categoryIndex: categoriesScraped + 1,
-          totalCategories: this.categories.length,
         });
 
-        const result = await this.scrapeCategory(category, maxPagesPerCategory, sessionId);
+        const result = await this.scrapeCategory(category, maxPagesPerCategory, sessionId, fetchJobDetails);
         
-        totalJobs += result.jobsFound;
         totalPages += result.pagesScraped;
         categoriesScraped++;
 
-        this.logger.info(`Completed category: ${category.name}`, {
-          jobsFound: result.jobsFound,
+        // Get REAL database count for accurate session tracking
+        const currentDbCount = this.database.getJobsCount();
+        const jobsFoundInSession = currentDbCount - initialDbCount;
+
+        this.logger.info(`<<< Completed category: ${category.name}`, {
+          jobsSavedFromCategory: result.jobsFound,
           pagesScraped: result.pagesScraped,
-          totalJobsSoFar: totalJobs,
+          totalJobsInDatabase: currentDbCount,
+          jobsAddedThisSession: jobsFoundInSession,
         });
 
-        // Update session if provided
+        // Update session with REAL database count
         if (sessionId) {
           this.database.updateScrapingSession(sessionId, {
             pagesScraped: totalPages,
-            jobsFound: totalJobs,
+            jobsFound: jobsFoundInSession, // Use real count, not accumulated
             status: 'running',
           });
         }
 
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         this.logger.error(`Error scraping category: ${category.name}`, {
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage,
         });
+        
+        // Log error activity
+        if (this.activityLogger) {
+          this.activityLogger.logError('alljobs', errorMessage, {
+            category: category.name,
+          });
+        }
+        
         // Continue with next category
       }
     }
 
+    // Get final REAL count from database
+    const finalDbCount = this.database.getJobsCount();
+    const totalNewJobs = finalDbCount - initialDbCount;
+
     this.logger.info('Multi-category scraping completed', {
-      totalJobs,
+      totalJobsInDatabase: finalDbCount,
+      newJobsAddedThisSession: totalNewJobs,
       totalPages,
       categoriesScraped,
       uniqueJobsCollected: this.scrapedJobIds.size,
     });
 
-    return { totalJobs, totalPages, categoriesScraped };
+    return { totalJobs: totalNewJobs, totalPages, categoriesScraped };
   }
 
   /**
@@ -181,13 +227,14 @@ export class AllJobsMultiCategoryScraper {
   private async scrapeCategory(
     category: CategoryDefinition,
     _maxPages: number, // Not used - no limit, but kept for API compatibility
-    _sessionId?: number
+    _sessionId?: number,
+    fetchJobDetails: boolean = false
   ): Promise<{ jobsFound: number; pagesScraped: number }> {
     let jobsFound = 0;
     let pagesScraped = 0;
     let currentPage = 1;
     let consecutiveEmptyPages = 0;
-    const maxConsecutiveEmptyPages = 100; // NO LIMIT: Increased to 100 - don't stop on gaps, only on truly empty pages
+    const maxConsecutiveEmptyPages = 200; // Increased to 200 - don't stop on gaps, continue scraping even with duplicates
     const categoryScrapedIds = new Set<string>(); // Track duplicates only within this category
 
     // NO LIMIT: Continue indefinitely until we hit truly empty pages or errors
@@ -203,6 +250,11 @@ export class AllJobsMultiCategoryScraper {
         // Parse jobs from page
         const jobs = this.parser.parseJobListings(html, pageUrl);
         
+        // Log parsing activity
+        if (this.activityLogger) {
+          this.activityLogger.logParsing('alljobs', category.name, currentPage, jobs.length);
+        }
+        
         // Add category to each job and filter duplicates within this category only
         // Database upsert will handle duplicates across categories
         const newJobs: JobListing[] = [];
@@ -210,9 +262,67 @@ export class AllJobsMultiCategoryScraper {
           if (!categoryScrapedIds.has(job.jobId)) {
             categoryScrapedIds.add(job.jobId);
             this.scrapedJobIds.add(job.jobId); // Track globally for this session
-            // Use category from scraping context - much faster than fetching each job page
+            // Use category from scraping context as initial value
+            // Will be enhanced with full categories from detail page if fetchJobDetails is enabled
             job.category = category.name;
             newJobs.push(job);
+          }
+        }
+
+        // Fetch job detail pages to extract ALL categories (if enabled)
+        if (fetchJobDetails && newJobs.length > 0 && this.detailFetcher) {
+          try {
+            this.logger.debug(`Fetching details for ${newJobs.length} jobs to extract full categories`, {
+              category: category.name,
+              page: currentPage,
+            });
+
+            const jobIds = newJobs.map(job => job.jobId);
+            const jobUrls = newJobs.map(job => job.applicationUrl.startsWith('http') 
+              ? job.applicationUrl 
+              : `${this.baseUrl}${job.applicationUrl.startsWith('/') ? job.applicationUrl : `/${job.applicationUrl}`}`
+            );
+
+            const detailResults = await this.detailFetcher.fetchJobDetails(jobIds, jobUrls);
+
+            // Update jobs with full category information from detail pages
+            for (let i = 0; i < newJobs.length; i++) {
+              const detailResult = detailResults[i];
+              if (detailResult.success && detailResult.html) {
+                const detailData = this.parser.parseJobDetailPage(detailResult.html, newJobs[i].jobId);
+                
+                // If we found categories from detail page, use them (join with comma)
+                // Otherwise, keep the category from scraping context
+                if (detailData.categories.length > 0) {
+                  newJobs[i].category = detailData.categories.join(', ');
+                  this.logger.debug('Updated job with categories from detail page', {
+                    jobId: newJobs[i].jobId,
+                    categories: detailData.categories,
+                  });
+                }
+
+                // Optionally update description and requirements if available
+                if (detailData.fullDescription && !newJobs[i].description) {
+                  newJobs[i].description = detailData.fullDescription;
+                }
+                if (detailData.fullRequirements && !newJobs[i].requirements) {
+                  newJobs[i].requirements = detailData.fullRequirements;
+                }
+              } else {
+                // If detail fetch failed, keep the category from scraping context
+                this.logger.debug('Detail fetch failed, using category from context', {
+                  jobId: newJobs[i].jobId,
+                  error: detailResult.error,
+                });
+              }
+            }
+          } catch (error) {
+            // If detail fetching fails, continue with category from context
+            this.logger.warn('Failed to fetch job details, using category from context', {
+              category: category.name,
+              page: currentPage,
+              error: error instanceof Error ? error.message : String(error),
+            });
           }
         }
 
@@ -225,39 +335,58 @@ export class AllJobsMultiCategoryScraper {
             consecutiveEmptyPages,
           });
         } else {
-          // Page has jobs - reset empty counter even if they're duplicates
-          consecutiveEmptyPages = 0;
-          
+          // Page has jobs - check if we saved any NEW jobs
           if (newJobs.length > 0) {
-            // Save to database
-            const saved = this.database.upsertJobs(newJobs);
-            jobsFound += newJobs.length;
+            // Reset empty counter only if we found NEW jobs
+            consecutiveEmptyPages = 0;
             
-            this.logger.info(`Page ${currentPage}: Found ${jobs.length} jobs, ${newJobs.length} new, saved ${saved}`, {
-              category: category.name,
+            // Save to database - track ACTUAL saved count
+            const savedCount = this.database.upsertJobs(newJobs);
+            jobsFound += savedCount; // Use actual saved count, not newJobs.length
+            
+            // Log database activity
+            if (this.activityLogger) {
+              this.activityLogger.logDatabase('alljobs', 'upsertJobs', savedCount);
+            }
+            
+            this.logger.info(`[${category.name}] Page ${currentPage}: Found ${jobs.length} jobs, ${newJobs.length} new, ${savedCount} saved to DB`, {
               page: currentPage,
+              totalSavedThisCategory: jobsFound,
             });
           } else {
-            this.logger.debug(`Page ${currentPage}: Found ${jobs.length} jobs but all duplicates`, {
-              category: category.name,
-            });
+            // All jobs are duplicates - count towards empty pages
+            consecutiveEmptyPages++;
+            this.logger.debug(`[${category.name}] Page ${currentPage}: Found ${jobs.length} jobs but all duplicates (consecutiveEmptyPages: ${consecutiveEmptyPages})`);
+            
+            // Don't stop on duplicates - continue scraping as they might be temporary blocking
+            // Only log warning if we hit the threshold
+            if (consecutiveEmptyPages >= maxConsecutiveEmptyPages) {
+              this.logger.warn(`[${category.name}] ${maxConsecutiveEmptyPages} consecutive pages with only duplicates - continuing anyway (might be temporary blocking)`, {
+                category: category.name,
+                consecutiveEmptyPages,
+                currentPage,
+              });
+            }
           }
         }
 
         pagesScraped++;
 
-        // Update session after each page for real-time progress tracking
-        if (_sessionId) {
+        // Update session after each page with REAL database count for live dashboard
+        // Only every 5 pages to reduce database writes
+        if (_sessionId && (pagesScraped % 5 === 0 || newJobs.length > 0)) {
+          const currentTotalJobs = this.database.getJobsCount();
           this.database.updateScrapingSession(_sessionId, {
             pagesScraped: pagesScraped,
-            jobsFound: jobsFound,
+            jobsFound: currentTotalJobs, // Use REAL database count
             status: 'running',
           });
         }
 
-        // Check if we should stop
-        if (consecutiveEmptyPages >= maxConsecutiveEmptyPages) {
-          this.logger.info(`Stopping category ${category.name}: ${maxConsecutiveEmptyPages} consecutive empty pages`);
+        // Only stop on TRULY empty pages (no jobs at all), not on duplicates
+        // This ensures we scrape everything even if there are temporary blocks
+        if (jobs.length === 0 && consecutiveEmptyPages >= maxConsecutiveEmptyPages) {
+          this.logger.info(`Stopping category ${category.name}: ${maxConsecutiveEmptyPages} consecutive TRULY empty pages (no jobs found)`);
           break;
         }
 
@@ -310,7 +439,7 @@ export class AllJobsMultiCategoryScraper {
       // Alternative: Look for page number greater than current
       const $pageLinks = $('a[href*="SearchResultsGuest.aspx"][href*="page="]');
       let hasHigherPage = false;
-      $pageLinks.each((_, el) => {
+      $pageLinks.each((_index: number, el: any) => {
         const href = $(el).attr('href') || '';
         const pageMatch = href.match(/page=(\d+)/);
         if (pageMatch) {
