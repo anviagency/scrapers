@@ -439,6 +439,34 @@ export abstract class BaseDatabaseManager {
   }
 
   /**
+   * Checks which job IDs from the given list already exist in the database
+   * Memory-efficient batch query approach
+   * @param jobIds - Array of job IDs to check
+   * @returns Set of job IDs that already exist in the database
+   */
+  getExistingJobIdsFromList(jobIds: string[]): Set<string> {
+    if (jobIds.length === 0) {
+      return new Set();
+    }
+
+    try {
+      const tableName = this.getJobsTableName();
+      // SQLite supports up to 999 variables, but we'll be conservative
+      const placeholders = jobIds.map(() => '?').join(',');
+      const stmt = this.db.prepare(`SELECT job_id FROM ${tableName} WHERE job_id IN (${placeholders})`);
+      const rows = stmt.all(...jobIds) as Array<{ job_id: string }>;
+      return new Set(rows.map((row) => row.job_id));
+    } catch (error) {
+      this.logger.error('Failed to check existing job IDs', {
+        error: error instanceof Error ? error.message : String(error),
+        source: this.source,
+        batchSize: jobIds.length,
+      });
+      return new Set();
+    }
+  }
+
+  /**
    * Gets a single job by ID
    * @param jobId - Job ID to retrieve
    * @returns Job listing or null if not found

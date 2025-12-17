@@ -15,7 +15,15 @@ async function investigateListings(): Promise<void> {
   // Initialize HTTP client with proxy
   const proxyKey = process.env.EVOMI_PROXY_KEY || '';
   const proxyEndpoint = process.env.EVOMI_PROXY_ENDPOINT;
-  const proxyManager = new EvomiProxyManager(proxyKey, logger, proxyEndpoint);
+  const proxyUsername = process.env.EVOMI_PROXY_USERNAME;
+  const proxyPassword = process.env.EVOMI_PROXY_PASSWORD;
+  const proxyManager = new EvomiProxyManager({
+    proxyKey,
+    logger,
+    endpoint: proxyEndpoint,
+    username: proxyUsername,
+    password: proxyPassword,
+  });
   const httpClient = new HttpClient(proxyManager, logger, {
     rateLimitDelayMs: 2000,
     maxRetries: 3,

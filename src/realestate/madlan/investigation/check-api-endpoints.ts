@@ -12,7 +12,13 @@ import * as cheerio from 'cheerio';
 dotenv.config();
 
 const logger = createLogger('madlan-api-investigator');
-const proxyManager = new EvomiProxyManager(process.env.EVOMI_PROXY_KEY || '', logger, process.env.EVOMI_PROXY_ENDPOINT);
+const proxyManager = new EvomiProxyManager({
+  proxyKey: process.env.EVOMI_PROXY_KEY || '',
+  logger,
+  endpoint: process.env.EVOMI_PROXY_ENDPOINT,
+  username: process.env.EVOMI_PROXY_USERNAME,
+  password: process.env.EVOMI_PROXY_PASSWORD,
+});
 const httpClient = new HttpClient(proxyManager, logger, {
   rateLimitDelayMs: 1000,
   maxRetries: 3,

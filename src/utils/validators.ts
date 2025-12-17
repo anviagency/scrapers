@@ -15,6 +15,8 @@ export function loadConfig(): ScraperConfig {
     baseUrl: process.env.BASE_URL || 'https://www.alljobs.co.il',
     evomiProxyKey: process.env.EVOMI_PROXY_KEY,
     evomiProxyEndpoint: process.env.EVOMI_PROXY_ENDPOINT,
+    evomiProxyUsername: process.env.EVOMI_PROXY_USERNAME,
+    evomiProxyPassword: process.env.EVOMI_PROXY_PASSWORD,
     rateLimitDelayMs: process.env.RATE_LIMIT_DELAY_MS
       ? parseInt(process.env.RATE_LIMIT_DELAY_MS, 10)
       : 2500,

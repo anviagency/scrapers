@@ -77,13 +77,22 @@ export class HttpClient {
 
     // Only create proxy agent if proxy is explicitly enabled
     let httpsAgent = undefined;
+    let sessionId: string | undefined;
     if (this.useProxy) {
       const proxyConfig = this.proxyManager.getProxyConfig();
+      sessionId = this.proxyManager.getLastSessionId();
       if (proxyConfig.host && proxyConfig.port) {
         const proxyUrl = this.proxyManager.getProxyUrl();
-        this.logger.debug('Using proxy', { proxyHost: proxyConfig.host, proxyPort: proxyConfig.port });
+        this.logger.info('HTTP POST request with proxy', { 
+          url: url.substring(0, 100), 
+          proxyHost: proxyConfig.host, 
+          proxyPort: proxyConfig.port,
+          sessionId,
+        });
         httpsAgent = new HttpsProxyAgent(proxyUrl);
       }
+    } else {
+      this.logger.debug('HTTP POST request (no proxy)', { url: url.substring(0, 100) });
     }
 
     const requestConfig: AxiosRequestConfig = {
@@ -106,7 +115,7 @@ export class HttpClient {
       validateStatus: (status) => status >= 200 && status < 400,
     };
 
-    return this.executeWithRetry(url, requestConfig);
+    return this.executeWithRetry(url, requestConfig, sessionId);
   }
 
   /**
@@ -125,13 +134,22 @@ export class HttpClient {
 
     // Only create proxy agent if proxy is explicitly enabled
     let httpsAgent = undefined;
+    let sessionId: string | undefined;
     if (this.useProxy) {
       const proxyConfig = this.proxyManager.getProxyConfig();
+      sessionId = this.proxyManager.getLastSessionId();
       if (proxyConfig.host && proxyConfig.port) {
         const proxyUrl = this.proxyManager.getProxyUrl();
-        this.logger.debug('Using proxy', { proxyHost: proxyConfig.host, proxyPort: proxyConfig.port });
+        this.logger.info('HTTP GET request with proxy', { 
+          url: url.substring(0, 100), 
+          proxyHost: proxyConfig.host, 
+          proxyPort: proxyConfig.port,
+          sessionId,
+        });
         httpsAgent = new HttpsProxyAgent(proxyUrl);
       }
+    } else {
+      this.logger.debug('HTTP GET request (no proxy)', { url: url.substring(0, 100) });
     }
 
     const requestConfig: AxiosRequestConfig = {
@@ -158,7 +176,7 @@ export class HttpClient {
       validateStatus: (status) => status >= 200 && status < 400,
     };
 
-    return this.executeWithRetry(url, requestConfig);
+    return this.executeWithRetry(url, requestConfig, sessionId);
   }
 
   /**
@@ -166,11 +184,13 @@ export class HttpClient {
    * Falls back to direct request (no proxy) if proxy connection fails
    * @param url - URL being requested
    * @param config - Axios request configuration
+   * @param sessionId - Optional session ID for logging
    * @returns Promise resolving to Axios response
    */
   private async executeWithRetry(
     url: string,
-    config: AxiosRequestConfig
+    config: AxiosRequestConfig,
+    sessionId?: string
   ): Promise<AxiosResponse> {
     let lastError: Error | null = null;
     let triedWithoutProxy = false;
@@ -187,6 +207,7 @@ export class HttpClient {
           attempt: attempt + 1,
           maxRetries: this.config.maxRetries,
           usingProxy: isUsingProxy,
+          sessionId: sessionId || 'none',
         });
 
         const response = await axios(config);
@@ -212,6 +233,7 @@ export class HttpClient {
             status: response.status,
             attempt: attempt + 1,
             usedProxy: isUsingProxy,
+            sessionId: sessionId || 'none',
           });
 
           // Log successful request to activity logger
@@ -300,6 +322,7 @@ export class HttpClient {
             delayMs: delay,
             usingProxy: isUsingProxy,
             isBlocked,
+            sessionId: sessionId || 'none',
           });
 
           await this.sleep(delay);
@@ -333,6 +356,7 @@ export class HttpClient {
             attempts: attempt + 1,
             error: lastError.message,
             triedWithoutProxy,
+            sessionId: sessionId || 'none',
           });
         }
       }

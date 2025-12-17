@@ -30,7 +30,8 @@ export class AllJobsJobDetailFetcher {
   private readonly logger: Logger;
   private readonly baseUrl: string;
   private readonly config: Required<JobDetailFetcherConfig>;
-  private readonly fetchedCache: Map<string, string> = new Map(); // Cache to avoid duplicate requests
+  // MEMORY FIX: Removed HTML cache - it was causing memory leaks by storing full HTML pages
+  // Cache was growing unboundedly and consuming gigabytes of memory during long scraping sessions
 
   constructor(
     httpClient: HttpClient,
@@ -107,15 +108,6 @@ export class AllJobsJobDetailFetcher {
     jobId: string,
     jobUrl?: string
   ): Promise<JobDetailResult> {
-    // Check cache first
-    if (this.fetchedCache.has(jobId)) {
-      return {
-        jobId,
-        html: this.fetchedCache.get(jobId) || null,
-        success: true,
-      };
-    }
-
     const url = jobUrl || `${this.baseUrl}/Search/UploadSingle.aspx?JobID=${jobId}`;
 
     for (let attempt = 0; attempt <= this.config.retryAttempts; attempt++) {
@@ -128,9 +120,6 @@ export class AllJobsJobDetailFetcher {
         ]);
 
         const html = response.data;
-        
-        // Cache successful fetch
-        this.fetchedCache.set(jobId, html);
 
         return {
           jobId,
@@ -169,20 +158,6 @@ export class AllJobsJobDetailFetcher {
       success: false,
       error: 'Unknown error',
     };
-  }
-
-  /**
-   * Clears the cache
-   */
-  clearCache(): void {
-    this.fetchedCache.clear();
-  }
-
-  /**
-   * Gets cache size
-   */
-  getCacheSize(): number {
-    return this.fetchedCache.size;
   }
 
   /**

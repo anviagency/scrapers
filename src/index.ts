@@ -27,6 +27,10 @@ async function main(): Promise<void> {
       maxRetries: config.maxRetries,
     });
 
+    logger.info('Max pages', {
+      maxPages: config.maxPages,
+    });
+
     // Initialize monitoring components
     const activityLogger = ActivityLogger.getInstance(logger);
     const proxyStatusTracker = new ProxyStatusTracker(logger);
@@ -34,8 +38,17 @@ async function main(): Promise<void> {
     // ENABLE PROXY - Required to avoid blocking and ensure complete scraping
     const proxyKey = process.env.EVOMI_PROXY_KEY || config.evomiProxyKey || '';
     const proxyEndpoint = process.env.EVOMI_PROXY_ENDPOINT || config.evomiProxyEndpoint;
-    const proxyManager = new EvomiProxyManager(proxyKey, logger, proxyEndpoint, proxyStatusTracker);
-    
+    const proxyUsername = process.env.EVOMI_PROXY_USERNAME || config.evomiProxyUsername;
+    const proxyPassword = process.env.EVOMI_PROXY_PASSWORD || config.evomiProxyPassword;
+    const proxyManager = new EvomiProxyManager({
+      proxyKey,
+      logger,
+      endpoint: proxyEndpoint,
+      proxyStatusTracker,
+      username: proxyUsername,
+      password: proxyPassword,
+    });
+
     if (proxyKey) {
       logger.info('Using PROXY - required to avoid blocking and ensure complete scraping', {
         proxyEndpoint: proxyEndpoint || 'default',
@@ -74,10 +87,11 @@ async function main(): Promise<void> {
     );
 
     // Start scraping all categories
-    // NO LIMIT: Set to 10000 to ensure we get ALL jobs from each category
+    // Use MAX_PAGES env var to limit pages per category, default to 10000 (effectively unlimited)
     const result = await scraper.scrapeAllCategories({
       maxPagesPerCategory: config.maxPages || 10000,
       sessionId,
+      fetchJobDetails: true,
     });
 
     // Get final count

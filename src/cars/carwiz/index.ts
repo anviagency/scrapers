@@ -32,7 +32,16 @@ async function main(): Promise<void> {
     // ENABLE PROXY - Required to avoid blocking
     const proxyKey = process.env.EVOMI_PROXY_KEY || '';
     const proxyEndpoint = process.env.EVOMI_PROXY_ENDPOINT;
-    const proxyManager = new EvomiProxyManager(proxyKey, logger, proxyEndpoint, proxyStatusTracker);
+    const proxyUsername = process.env.EVOMI_PROXY_USERNAME;
+    const proxyPassword = process.env.EVOMI_PROXY_PASSWORD;
+    const proxyManager = new EvomiProxyManager({
+      proxyKey,
+      logger,
+      endpoint: proxyEndpoint,
+      proxyStatusTracker,
+      username: proxyUsername,
+      password: proxyPassword,
+    });
     
     if (proxyKey) {
       logger.info('Using PROXY - required to avoid blocking', {
