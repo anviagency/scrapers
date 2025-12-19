@@ -7,6 +7,7 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "dev:jobmaster": "ts-node src/scrapers/jobmaster/index.ts",
+    "dev:alljobs-sitemap": "ts-node src/scrapers/alljobs-sitemap/index.ts",
     "api": "ts-node src/api/server.ts",
     "test": "vitest",
     "test:watch": "vitest --watch",
